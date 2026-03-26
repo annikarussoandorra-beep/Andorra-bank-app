@@ -61,26 +61,7 @@ export default function App() {
     if (user?.demoTimeLeft !== undefined) {
       setDemoTimeLeft(user.demoTimeLeft);
     }
-  }, [user?.uid]);
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (botConfig.active && demoTimeLeft > 0) {
-      timer = setInterval(() => {
-        setDemoTimeLeft(prev => {
-          const next = Math.max(0, prev - 1);
-          // Sync with server every 30 seconds
-          if (next % 30 === 0) {
-            api.updateDemoTime(next);
-          }
-          return next;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [botConfig.active, demoTimeLeft > 0]);
+  }, [user?.uid, user?.demoTimeLeft]);
 
   const intervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -119,13 +100,14 @@ export default function App() {
 
         const fetchData = async () => {
           try {
-            const [txs, bot, msgs, users, teamsData, assetsData] = await Promise.all([
+            const [txs, bot, msgs, users, teamsData, assetsData, me] = await Promise.all([
               api.getTransactions(),
               api.getBotConfig(),
               api.getMessages(),
               api.getUsers(),
               api.getTeams(),
-              api.getAssets()
+              api.getAssets(),
+              api.getUser(currentUser.uid)
             ]);
             
             if (Array.isArray(txs)) setTransactions(txs);
@@ -136,6 +118,7 @@ export default function App() {
             if (Array.isArray(users)) setAllUsers(users);
             if (Array.isArray(teamsData)) setTeams(teamsData);
             if (Array.isArray(assetsData)) setAssets(assetsData);
+            if (me) setUser(me);
           } catch (e) {
             console.error("Data fetch failed", e);
           }
@@ -264,14 +247,12 @@ export default function App() {
   const updateBotConfig = async (newConfig: Partial<BotConfig>) => {
     if (!user) return;
     try {
+      // If activating, and we don't have a start time, set it
       if (newConfig.active && !botConfig.botStartTime) {
         const startTime = Date.now();
-        setBotConfig(prev => ({ ...prev, botStartTime: startTime }));
         await api.updateBotConfig({ ...newConfig, botStartTime: startTime });
       } else if (newConfig.active === false) {
-        setBotConfig(prev => ({ ...prev, botStartTime: null }));
         await api.updateBotConfig({ ...newConfig, botStartTime: null });
-        api.updateDemoTime(demoTimeLeft);
       } else {
         await api.updateBotConfig(newConfig);
       }
@@ -389,6 +370,21 @@ export default function App() {
       });
       const msgs = await api.getMessages();
       setMessages(msgs);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMarkAsRead = async (senderId: string) => {
+    if (!user) return;
+    try {
+      await api.markMessagesAsRead(senderId);
+      // Update local state immediately for better UX
+      setMessages(prev => prev.map(m => 
+        (m.senderId === senderId && m.receiverId === user.uid) 
+          ? { ...m, read: true } 
+          : m
+      ));
     } catch (e) {
       console.error(e);
     }
@@ -551,12 +547,15 @@ export default function App() {
     );
   }
 
+  const unreadMessagesCount = messages.filter(m => m.receiverId === user?.uid && !m.read).length;
+
   return (
     <Layout 
       activeTab={activeTab} 
       setActiveTab={setActiveTab} 
       user={user}
       onLogout={handleLogout}
+      unreadMessagesCount={unreadMessagesCount}
     >
       {activeTab === 'dashboard' && (
         <Dashboard 
@@ -585,6 +584,7 @@ export default function App() {
           onDeleteMessage={handleDeleteMessage}
           onEditMessage={handleEditMessage}
           onClearChat={handleClearChat}
+          onMarkAsRead={handleMarkAsRead}
           allUsers={allUsers}
           contacts={user.role === 'client' 
             ? [

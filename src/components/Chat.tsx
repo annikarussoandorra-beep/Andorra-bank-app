@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ChatMessage, UserProfile } from '../types';
 import { cn } from '../lib/utils';
+import { api } from '../firebase';
 
 interface ChatProps {
   currentUser: UserProfile;
@@ -25,6 +26,7 @@ interface ChatProps {
   onDeleteMessage: (id: string) => void;
   onEditMessage: (id: string, text: string) => void;
   onClearChat: (contactId: string) => void;
+  onMarkAsRead: (senderId: string) => void;
   contacts: UserProfile[];
   allUsers: UserProfile[];
 }
@@ -36,6 +38,7 @@ export default function Chat({
   onDeleteMessage,
   onEditMessage,
   onClearChat,
+  onMarkAsRead,
   contacts, 
   allUsers 
 }: ChatProps) {
@@ -139,6 +142,9 @@ export default function Chat({
     setSelectedContact(contact);
     setShowMobileChat(true);
     setShowChatMenu(false);
+    
+    // Mark messages as read
+    onMarkAsRead(contact.uid);
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -206,8 +212,10 @@ export default function Chat({
                   <span className="text-[8px] lg:text-[10px] text-gray-400">
                     {lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                   </span>
-                  {lastMsg && lastMsg.senderId !== currentUser.uid && (
-                    <div className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-[#FF0000] animate-pulse"></div>
+                  {messages.filter(m => m.senderId === contact.uid && m.receiverId === currentUser.uid && !m.read).length > 0 && (
+                    <div className="bg-[#FF0000] text-white text-[8px] lg:text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      {messages.filter(m => m.senderId === contact.uid && m.receiverId === currentUser.uid && !m.read).length}
+                    </div>
                   )}
                 </div>
               </button>
@@ -301,36 +309,59 @@ export default function Chat({
                   )}>
                     {msg.type === 'requisites' ? (
                       <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-[#FF0000] font-bold mb-1">
+                        <div className={cn(
+                          "flex items-center gap-2 font-bold mb-1",
+                          msg.senderId === currentUser.uid ? "text-white" : "text-[#FF0000]"
+                        )}>
                           <CreditCard size={16} />
                           <span>Bank Requisites</span>
                         </div>
-                        <div className="bg-gray-50 p-3 rounded-xl text-gray-700 font-mono text-[10px] lg:text-xs whitespace-pre-wrap border border-gray-100">
+                        <div className={cn(
+                          "p-3 rounded-xl font-mono text-[10px] lg:text-xs whitespace-pre-wrap border",
+                          msg.senderId === currentUser.uid 
+                            ? "bg-white/10 text-white border-white/20" 
+                            : "bg-gray-50 text-gray-700 border-gray-100"
+                        )}>
                           {msg.requisites}
                         </div>
                         <button 
                           onClick={() => copyToClipboard(msg.requisites || '', msg.id)}
                           className={cn(
                             "w-full py-2 rounded-xl flex items-center justify-center gap-2 transition-all font-bold text-[10px] lg:text-xs",
-                            copySuccess === msg.id ? "bg-green-500 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            copySuccess === msg.id 
+                              ? "bg-green-500 text-white" 
+                              : (msg.senderId === currentUser.uid ? "bg-white/20 text-white hover:bg-white/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
                           )}
                         >
                           {copySuccess === msg.id ? <Check size={14} /> : <Copy size={14} />}
-                          {copySuccess === msg.id ? 'Copied!' : 'Copy Requisites'}
+                          {copySuccess === msg.id ? 'Copied!' : 'Copy Details'}
                         </button>
                       </div>
                     ) : msg.type === 'payment_link' ? (
                       <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-[#FF0000] font-bold mb-1">
+                        <div className={cn(
+                          "flex items-center gap-2 font-bold mb-1",
+                          msg.senderId === currentUser.uid ? "text-white" : "text-[#FF0000]"
+                        )}>
                           <ExternalLink size={16} />
                           <span>Payment Request</span>
                         </div>
-                        <p className="text-gray-700">{msg.paymentLink?.text}</p>
+                        <p className={cn(
+                          "text-sm",
+                          msg.senderId === currentUser.uid ? "text-white/90" : "text-gray-700"
+                        )}>
+                          {msg.paymentLink?.text}
+                        </p>
                         <a 
                           href={msg.paymentLink?.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full py-3 bg-[#FF0000] text-white rounded-xl flex items-center justify-center gap-2 font-bold hover:bg-red-700 transition-all shadow-lg shadow-red-500/20"
+                          className={cn(
+                            "w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all shadow-lg",
+                            msg.senderId === currentUser.uid 
+                              ? "bg-white text-[#FF0000] hover:bg-gray-100 shadow-white/10" 
+                              : "bg-[#FF0000] text-white hover:bg-red-700 shadow-red-500/20"
+                          )}
                         >
                           {msg.paymentLink?.buttonLabel}
                           <ExternalLink size={14} />

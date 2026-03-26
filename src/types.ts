@@ -13,6 +13,7 @@ export interface UserProfile {
   status: 'active' | 'suspended';
   isActivated: boolean;
   demoTimeLeft?: number;
+  lastSeen?: string;
 }
 
 export interface Transaction {

@@ -31,12 +31,29 @@ interface BotControlProps {
   demoTimeLeft: number;
 }
 
-export default function BotControl({ user, config, onUpdateConfig, onTrade, availableAssets, transactions, demoTimeLeft }: BotControlProps) {
+export default function BotControl({ user, config, onUpdateConfig, availableAssets, transactions, demoTimeLeft }: BotControlProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [localDemoTime, setLocalDemoTime] = useState(demoTimeLeft);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // Sync local demo time with prop
+  useEffect(() => {
+    setLocalDemoTime(demoTimeLeft);
+  }, [demoTimeLeft]);
+
+  // Local countdown for demo time
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (!user.isActivated && localDemoTime > 0 && config.active) {
+      interval = setInterval(() => {
+        setLocalDemoTime(prev => Math.max(0, prev - 1));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [user.isActivated, localDemoTime, config.active]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -55,7 +72,6 @@ export default function BotControl({ user, config, onUpdateConfig, onTrade, avai
   }, [config.active, config.botStartTime]);
 
   const tradeIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const isFirstTradeRef = useRef(true);
 
   const safeTransactions = Array.isArray(transactions) ? transactions : [];
 
@@ -118,91 +134,6 @@ export default function BotControl({ user, config, onUpdateConfig, onTrade, avai
     }
   };
 
-  useEffect(() => {
-    if (config.active && (user.isActivated || demoTimeLeft > 0)) {
-      // First trade immediately
-      if (isFirstTradeRef.current) {
-        generateTrade();
-        isFirstTradeRef.current = false;
-      }
-
-      const scheduleNextTrade = () => {
-        const nextInterval = Math.floor(Math.random() * (60000 - 10000 + 1) + 10000); // 10-60 seconds
-        tradeIntervalRef.current = setTimeout(() => {
-          generateTrade();
-          scheduleNextTrade();
-        }, nextInterval);
-      };
-
-      scheduleNextTrade();
-    } else {
-      if (tradeIntervalRef.current) {
-        clearTimeout(tradeIntervalRef.current);
-      }
-    }
-
-    return () => {
-      if (tradeIntervalRef.current) {
-        clearTimeout(tradeIntervalRef.current);
-      }
-    };
-  }, [config.active, demoTimeLeft]);
-
-  const generateTrade = () => {
-    if (demoTimeLeft <= 0) return;
-
-    const assetsToUse = config.autoSelectAssets 
-      ? (availableAssets || []).map(a => a.symbol)
-      : (config.assets || []);
-    
-    if (!assetsToUse || assetsToUse.length === 0) return;
-
-    const randomAssetSymbol = assetsToUse[Math.floor(Math.random() * assetsToUse.length)];
-    const asset = (availableAssets || []).find(a => a.symbol === randomAssetSymbol);
-    if (!asset) return;
-
-    // All trades are profitable as per user request
-    const isWin = true; 
-    
-    // Profit limits: 100-120 EUR per 24 hours
-    // Assuming ~100 trades per day (every ~15 mins, but here it's 10-60s, so many more)
-    // Let's say 100-120 EUR / (24 * 60 * 60 / 30) = ~0.03 - 0.05 EUR per trade
-    // But user says "доход не должен превышать +-100 евро за 24 часа"
-    // So we need to check total profit in last 24h
-    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const profitLast24h = tradeTransactions
-      .filter(t => new Date(t.timestamp).getTime() > twentyFourHoursAgo)
-      .reduce((acc, t) => acc + t.amount, 0);
-
-    const maxDailyProfit = config.strategy === 'aggressive' ? 120 : 100;
-    
-    if (profitLast24h >= maxDailyProfit) {
-      console.log('Daily profit limit reached');
-      return;
-    }
-
-    const profitPercent = config.strategy === 'conservative' 
-      ? (Math.random() * 0.8 + 0.3) / 100 
-      : (Math.random() * 1.5 + 0.5) / 100;
-    
-    const investment = Math.min(config.maxInvestment, user.balance * 0.1);
-    let profit = Number((investment * profitPercent).toFixed(2));
-
-    // Adjust profit if it would exceed daily limit
-    if (profitLast24h + profit > maxDailyProfit) {
-      profit = Number((maxDailyProfit - profitLast24h).toFixed(2));
-    }
-
-    if (profit <= 0) return;
-
-    onTrade({
-      type: 'sell', // All profitable trades are 'sell' for simplicity in this mock
-      amount: profit,
-      asset: asset.symbol,
-      price: asset.currentPrice,
-    });
-  };
-
   return (
     <div className="space-y-4 lg:space-y-8">
       {/* Balance Header */}
@@ -256,11 +187,11 @@ export default function BotControl({ user, config, onUpdateConfig, onTrade, avai
                         Account Activated
                       </span>
                     </div>
-                  ) : demoTimeLeft > 0 ? (
+                  ) : localDemoTime > 0 ? (
                     <div className="flex items-center gap-2 px-3 py-1 bg-blue-500/20 rounded-full border border-blue-500/30">
                       <Clock size={12} className="text-blue-400" />
                       <span className="text-[10px] lg:text-xs font-bold text-blue-400 font-mono">
-                        Demo Time: {formatTime(demoTimeLeft)}
+                        Demo Time: {formatTime(localDemoTime)}
                       </span>
                     </div>
                   ) : (
@@ -275,17 +206,17 @@ export default function BotControl({ user, config, onUpdateConfig, onTrade, avai
               </div>
           </div>
           <button 
-            disabled={!user.isActivated && demoTimeLeft <= 0}
+            disabled={!user.isActivated && localDemoTime <= 0}
             onClick={() => onUpdateConfig({ active: !config.active })}
             className={cn(
               "w-full md:w-auto px-6 lg:px-10 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-bold text-base lg:text-lg transition-all flex items-center justify-center gap-2 lg:gap-3 shadow-xl",
-              (!user.isActivated && demoTimeLeft <= 0) ? "bg-gray-600 cursor-not-allowed" :
+              (!user.isActivated && localDemoTime <= 0) ? "bg-gray-600 cursor-not-allowed" :
               config.active 
                 ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" 
                 : "bg-green-500 hover:bg-green-600 shadow-green-500/20"
             )}
           >
-            {(!user.isActivated && demoTimeLeft <= 0) ? <><AlertCircle size={20} className="lg:w-6 lg:h-6" /> Demo Expired</> :
+            {(!user.isActivated && localDemoTime <= 0) ? <><AlertCircle size={20} className="lg:w-6 lg:h-6" /> Demo Expired</> :
              config.active ? <><Pause size={20} className="lg:w-6 lg:h-6" /> Stop Bot</> : <><Play size={20} className="lg:w-6 lg:h-6" /> Start Bot</>}
           </button>
         </div>

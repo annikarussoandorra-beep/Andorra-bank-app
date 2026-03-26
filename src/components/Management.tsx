@@ -26,6 +26,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile, UserRole, Team, Transaction, BotConfig } from '../types';
 import { cn } from '../lib/utils';
+import { api } from '../firebase';
 
 interface ManagementProps {
   currentUser: UserProfile;
@@ -89,8 +90,43 @@ export default function Management({ currentUser, users, teams, transactions, on
     balance: 0,
     teamId: '' as string | null,
     managerId: '' as string | null,
-    isActivated: false
+    isActivated: false,
+    demoTimeLeft: 7200
   });
+
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [transactionUser, setTransactionUser] = useState<UserProfile | null>(null);
+  const [transactionData, setTransactionData] = useState({
+    type: 'bonus',
+    amount: 0,
+    status: 'completed'
+  });
+
+  const handleCreateTransaction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!transactionUser) return;
+    
+    try {
+      await api.adminCreateTransaction({
+        userId: transactionUser.uid,
+        ...transactionData
+      });
+      setIsTransactionModalOpen(false);
+      setTransactionUser(null);
+      alert('Transaction created successfully');
+    } catch (error) {
+      alert('Failed to create transaction');
+    }
+  };
+
+  const isOnline = (lastSeen?: string) => {
+    if (!lastSeen) return false;
+    const lastSeenDate = new Date(lastSeen);
+    const now = new Date();
+    const diff = now.getTime() - lastSeenDate.getTime();
+    // Online if seen in last 60 seconds, or if seen "in the future" (clock skew) within 60 seconds
+    return diff >= -60000 && diff < 60000;
+  };
 
   const [newTeam, setNewTeam] = useState({
     name: '',
@@ -107,7 +143,17 @@ export default function Management({ currentUser, users, teams, transactions, on
     };
     onCreateUser(userData);
     setIsCreateModalOpen(false);
-    setNewUser({ email: '', password: '', displayName: '', role: 'client', balance: 10000, teamId: '', managerId: '', isActivated: false });
+    setNewUser({ 
+      email: '', 
+      password: '', 
+      displayName: '', 
+      role: 'client', 
+      balance: 0, 
+      teamId: '', 
+      managerId: '', 
+      isActivated: false,
+      demoTimeLeft: 7200
+    });
   };
 
   const handleUpdateUser = (e: React.FormEvent) => {
@@ -178,51 +224,34 @@ export default function Management({ currentUser, users, teams, transactions, on
             <div className="p-2 bg-red-50 rounded-xl text-[#FF0000]">
               <Users size={20} />
             </div>
-            <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-1 rounded-full">+5%</span>
           </div>
           <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Users</p>
-          <h3 className="text-2xl font-bold">{users.length}</h3>
+          <h3 className="text-2xl font-bold">{users.filter(u => u.role === 'client').length}</h3>
         </div>
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
-              <DollarSign size={20} />
+        {(currentUser.role === 'admin' || currentUser.role === 'master' || currentUser.role === 'team_lead') && (
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2 bg-blue-50 rounded-xl text-blue-600">
+                <Shield size={20} />
+              </div>
             </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Managers</p>
+            <h3 className="text-2xl font-bold">{users.filter(u => u.role === 'manager').length}</h3>
           </div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Capital</p>
-          <h3 className="text-2xl font-bold">{users.reduce((acc, u) => acc + u.balance, 0).toLocaleString()} €</h3>
-        </div>
+        )}
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-purple-50 rounded-xl text-purple-600">
-              <Activity size={20} />
+        {(currentUser.role === 'admin' || currentUser.role === 'master') && (
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-4">
+              <div className="p-2 bg-orange-50 rounded-xl text-orange-600">
+                <LayoutGrid size={20} />
+              </div>
             </div>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Teams</p>
+            <h3 className="text-2xl font-bold">{teams.length}</h3>
           </div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Volume</p>
-          <h3 className="text-2xl font-bold">{transactions.reduce((acc, tx) => acc + tx.amount, 0).toLocaleString()} €</h3>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-green-50 rounded-xl text-green-600">
-              <Shield size={20} />
-            </div>
-          </div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Activated Users</p>
-          <h3 className="text-2xl font-bold">{users.filter(u => u.isActivated).length}</h3>
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="p-2 bg-orange-50 rounded-xl text-orange-600">
-              <Shield size={20} />
-            </div>
-          </div>
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Active Teams</p>
-          <h3 className="text-2xl font-bold">{teams.length}</h3>
-        </div>
+        )}
       </div>
 
       {/* Header Actions */}
@@ -449,10 +478,10 @@ export default function Management({ currentUser, users, teams, transactions, on
                       <td className="px-8 py-6">
                         <span className={cn(
                           "flex items-center gap-1.5 text-xs font-bold",
-                          user.status === 'active' ? "text-green-500" : "text-red-500"
+                          isOnline(user.lastSeen) ? "text-green-500" : "text-gray-400"
                         )}>
-                          <div className={cn("w-1.5 h-1.5 rounded-full", user.status === 'active' ? "bg-green-500" : "bg-red-500")} />
-                          {user.status.toUpperCase()}
+                          <div className={cn("w-1.5 h-1.5 rounded-full", isOnline(user.lastSeen) ? "bg-green-500" : "bg-gray-400")} />
+                          {isOnline(user.lastSeen) ? "ONLINE" : "OFFLINE"}
                         </span>
                       </td>
                       {managementTab === 'clients' && (
@@ -464,6 +493,16 @@ export default function Management({ currentUser, users, teams, transactions, on
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                           {managementTab === 'clients' && (
                             <>
+                              <button 
+                                onClick={() => {
+                                  setTransactionUser(user);
+                                  setIsTransactionModalOpen(true);
+                                }}
+                                className="p-2 hover:bg-green-50 text-green-600 rounded-xl transition-colors"
+                                title="Create Transaction"
+                              >
+                                <DollarSign size={18} />
+                              </button>
                               <button 
                                 onClick={() => setViewingUserTxs(user)}
                                 className="p-2 hover:bg-blue-50 text-blue-600 rounded-xl transition-colors"
@@ -820,14 +859,25 @@ export default function Management({ currentUser, users, teams, transactions, on
                   </select>
                 </div>
                 {managementTab === 'clients' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Initial Balance</label>
-                    <input 
-                      type="number" 
-                      value={newUser.balance}
-                      onChange={(e) => setNewUser({...newUser, balance: Number(e.target.value)})}
-                      className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Initial Balance</label>
+                      <input 
+                        type="number" 
+                        value={newUser.balance}
+                        onChange={(e) => setNewUser({...newUser, balance: Number(e.target.value)})}
+                        className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Demo Time (sec)</label>
+                      <input 
+                        type="number" 
+                        value={newUser.demoTimeLeft}
+                        onChange={(e) => setNewUser({...newUser, demoTimeLeft: Number(e.target.value)})}
+                        className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -948,14 +998,25 @@ export default function Management({ currentUser, users, teams, transactions, on
                     </select>
                   </div>
                   {editingUser.role === 'client' && (
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Balance</label>
-                      <input 
-                        type="number" 
-                        value={editingUser.balance}
-                        onChange={(e) => setEditingUser({...editingUser, balance: Number(e.target.value)})}
-                        className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Balance</label>
+                        <input 
+                          type="number" 
+                          value={editingUser.balance}
+                          onChange={(e) => setEditingUser({...editingUser, balance: Number(e.target.value)})}
+                          className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Demo Time (sec)</label>
+                        <input 
+                          type="number" 
+                          value={editingUser.demoTimeLeft}
+                          onChange={(e) => setEditingUser({...editingUser, demoTimeLeft: Number(e.target.value)})}
+                          className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1083,6 +1144,65 @@ export default function Management({ currentUser, users, teams, transactions, on
                 )}
               </form>
             )}
+          </motion.div>
+        </div>
+      )}
+
+      {/* Transaction Modal */}
+      {isTransactionModalOpen && transactionUser && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold">Create Transaction</h3>
+              <button onClick={() => setIsTransactionModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-xl">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateTransaction} className="space-y-6">
+              <div className="p-4 bg-gray-50 rounded-2xl mb-6">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Target Client</p>
+                <p className="font-bold text-gray-900">{transactionUser.displayName}</p>
+                <p className="text-xs text-gray-500">{transactionUser.email}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Type</label>
+                  <select 
+                    value={transactionData.type}
+                    onChange={(e) => setTransactionData({...transactionData, type: e.target.value})}
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                  >
+                    <option value="bonus">Bonus</option>
+                    <option value="deposit">Deposit</option>
+                    <option value="withdrawal">Withdrawal</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Amount (€)</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={transactionData.amount}
+                    onChange={(e) => setTransactionData({...transactionData, amount: Number(e.target.value)})}
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                  />
+                </div>
+              </div>
+
+              <button 
+                type="submit"
+                className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-lg hover:bg-green-700 transition-all shadow-xl shadow-green-500/20"
+              >
+                Execute Transaction
+              </button>
+            </form>
           </motion.div>
         </div>
       )}

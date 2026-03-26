@@ -193,5 +193,21 @@ export const api = {
       body: JSON.stringify({ demoTimeLeft })
     });
     return response.json();
+  },
+  markMessagesAsRead: async (senderId: string) => {
+    const res = await fetch('/api/messages/read', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ senderId })
+    });
+    return res.json();
+  },
+  adminCreateTransaction: async (data: any) => {
+    const res = await fetch('/api/admin/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return res.json();
   }
 };

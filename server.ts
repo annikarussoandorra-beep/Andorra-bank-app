@@ -25,7 +25,8 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: String, required: true },
   status: { type: String, default: 'active' },
   isActivated: { type: Boolean, default: false },
-  demoTimeLeft: { type: Number, default: 7200 }
+  demoTimeLeft: { type: Number, default: 7200 },
+  lastSeen: { type: String, default: () => new Date().toISOString() }
 });
 
 const teamSchema = new mongoose.Schema({
@@ -60,7 +61,8 @@ const botConfigSchema = new mongoose.Schema({
   maxInvestment: { type: Number, default: 1000 },
   assets: { type: [String], default: ['BTC', 'ETH', 'SOL'] },
   autoSelectAssets: { type: Boolean, default: true },
-  botStartTime: { type: Number, default: null }
+  botStartTime: { type: Number, default: null },
+  lastTradeTime: { type: Number, default: null }
 });
 
 const messageSchema = new mongoose.Schema({
@@ -123,6 +125,98 @@ async function startServer() {
   app.use(express.json());
   app.use(cookieParser());
 
+  // Bot Simulation Background Task
+  setInterval(async () => {
+    try {
+      const activeBots = await BotConfig.find({ active: true });
+      for (const bot of activeBots) {
+        if (!bot.botStartTime) {
+          bot.botStartTime = Date.now();
+          await bot.save();
+        }
+        const user = await User.findOne({ uid: bot.userId });
+        if (!user) continue;
+
+        // Check demo time
+        if (!user.isActivated) {
+          const currentDemoTime = user.demoTimeLeft || 0;
+          if (currentDemoTime <= 0) {
+            bot.active = false;
+            bot.botStartTime = null;
+            await bot.save();
+            continue;
+          }
+          // Decrement demo time (10 seconds)
+          user.demoTimeLeft = Math.max(0, currentDemoTime - 10);
+          await user.save();
+        }
+
+        // Generate trade if needed
+        const now = Date.now();
+        const lastTrade = bot.lastTradeTime || 0;
+        const nextTradeInterval = Math.floor(Math.random() * (60000 - 10000 + 1) + 10000); // 10-60 seconds
+
+        if (now - lastTrade > nextTradeInterval) {
+          const assetsToUse = bot.autoSelectAssets 
+            ? INITIAL_ASSETS.map(a => a.symbol)
+            : bot.assets;
+          
+          if (assetsToUse && assetsToUse.length > 0) {
+            const randomSymbol = assetsToUse[Math.floor(Math.random() * assetsToUse.length)];
+            const asset = INITIAL_ASSETS.find(a => a.symbol === randomSymbol);
+            
+            if (asset) {
+              // Daily profit check
+              const twentyFourHoursAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+              const recentTxs = await Transaction.find({
+                userId: user.uid,
+                timestamp: { $gt: twentyFourHoursAgo },
+                type: { $in: ['buy', 'sell'] }
+              });
+              const profitLast24h = recentTxs.reduce((acc, t) => acc + t.amount, 0);
+              const maxDailyProfit = bot.strategy === 'aggressive' ? 120 : 100;
+
+              if (profitLast24h < maxDailyProfit) {
+                const profitPercent = bot.strategy === 'conservative' 
+                  ? (Math.random() * 0.8 + 0.3) / 100 
+                  : (Math.random() * 1.5 + 0.5) / 100;
+                
+                const investment = Math.min(bot.maxInvestment, user.balance * 0.1);
+                let profit = Number((investment * profitPercent).toFixed(2));
+
+                if (profitLast24h + profit > maxDailyProfit) {
+                  profit = Number((maxDailyProfit - profitLast24h).toFixed(2));
+                }
+
+                if (profit > 0) {
+                  const tx = new Transaction({
+                    id: Math.random().toString(36).substring(2, 15),
+                    userId: user.uid,
+                    type: 'sell',
+                    amount: profit,
+                    asset: asset.symbol,
+                    price: asset.currentPrice,
+                    timestamp: new Date().toISOString(),
+                    status: 'completed'
+                  });
+                  await tx.save();
+                  
+                  user.balance += profit;
+                  await user.save();
+                  
+                  bot.lastTradeTime = now;
+                  await bot.save();
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Bot simulation error:", e);
+    }
+  }, 10000);
+
   // Simple session middleware
   const authMiddleware = async (req: any, res: any, next: any) => {
     try {
@@ -130,6 +224,11 @@ async function startServer() {
       if (!userId) return res.status(401).json({ error: "Unauthorized" });
       const user = await User.findOne({ uid: userId });
       if (!user) return res.status(401).json({ error: "User not found" });
+      
+      // Update lastSeen on every request
+      user.lastSeen = new Date().toISOString();
+      await user.save();
+      
       req.user = user;
       next();
     } catch (e) {
@@ -348,7 +447,8 @@ async function startServer() {
         ...req.body,
         createdAt: new Date().toISOString(),
         status: 'active',
-        isActivated: req.body.role !== 'client'
+        isActivated: req.body.role !== 'client',
+        lastSeen: new Date().toISOString()
       });
       await newUser.save();
       res.json({ success: true, uid: newUser.uid });
@@ -477,9 +577,22 @@ async function startServer() {
 
   app.post("/api/admin/bot-config/:userId", authMiddleware, async (req: any, res) => {
     try {
+      const { userId } = req.params;
+      const updateData = { ...req.body };
+      
+      // If activating bot and no start time, set it
+      if (updateData.active === true) {
+        const currentConfig = await BotConfig.findOne({ userId });
+        if (!currentConfig || !currentConfig.botStartTime) {
+          updateData.botStartTime = Date.now();
+        }
+      } else if (updateData.active === false) {
+        updateData.botStartTime = null;
+      }
+
       await BotConfig.findOneAndUpdate(
-        { userId: req.params.userId },
-        { ...req.body },
+        { userId },
+        updateData,
         { upsert: true }
       );
       res.json({ success: true });
@@ -584,6 +697,22 @@ async function startServer() {
           { senderId: contactId, receiverId: user.uid }
         ]
       });
+      
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/messages/read", authMiddleware, async (req: any, res) => {
+    try {
+      const { senderId } = req.body;
+      const user = req.user;
+      
+      await Message.updateMany(
+        { senderId, receiverId: user.uid, read: false },
+        { $set: { read: true } }
+      );
       
       res.json({ success: true });
     } catch (e) {

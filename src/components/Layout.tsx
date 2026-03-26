@@ -24,9 +24,10 @@ interface LayoutProps {
   setActiveTab: (tab: string) => void;
   user: UserProfile;
   onLogout: () => void;
+  unreadMessagesCount?: number;
 }
 
-export default function Layout({ children, activeTab, setActiveTab, user, onLogout }: LayoutProps) {
+export default function Layout({ children, activeTab, setActiveTab, user, onLogout, unreadMessagesCount = 0 }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const userRole = user.role;
@@ -81,11 +82,26 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogo
               activeTab === item.id ? "bg-white text-[#FF0000] shadow-md" : "hover:bg-white/10"
             )}
           >
-            <item.icon size={22} className={cn(activeTab === item.id ? "text-[#FF0000]" : "text-white/80 group-hover:text-white")} />
+            <div className="relative flex items-center justify-center">
+              <item.icon size={22} className={cn(activeTab === item.id ? "text-[#FF0000]" : "text-white/80 group-hover:text-white")} />
+              {item.id === 'chat' && unreadMessagesCount > 0 && !isSidebarOpen && !isMobileMenuOpen && (
+                <span className="absolute -top-2 -right-2 bg-white text-[#FF0000] text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">
+                  {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                </span>
+              )}
+            </div>
             {(isSidebarOpen || isMobileMenuOpen) && (
               <span className="font-medium whitespace-nowrap">{item.label}</span>
             )}
-            {(isSidebarOpen || isMobileMenuOpen) && activeTab === item.id && (
+            {item.id === 'chat' && unreadMessagesCount > 0 && (isSidebarOpen || isMobileMenuOpen) && (
+              <span className={cn(
+                "ml-auto bg-white text-[#FF0000] text-[10px] font-bold px-2 py-0.5 rounded-full",
+                activeTab === 'chat' && "bg-[#FF0000] text-white"
+              )}>
+                {unreadMessagesCount}
+              </span>
+            )}
+            {(isSidebarOpen || isMobileMenuOpen) && activeTab === item.id && item.id !== 'chat' && (
               <ChevronRight size={16} className="ml-auto" />
             )}
           </button>
