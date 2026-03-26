@@ -208,6 +208,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || 'Failed to create transaction');
+    }
     return res.json();
   }
 };

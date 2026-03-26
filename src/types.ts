@@ -12,6 +12,7 @@ export interface UserProfile {
   createdAt: string;
   status: 'active' | 'suspended';
   isActivated: boolean;
+  redirectUrl?: string | null;
   demoTimeLeft?: number;
   lastSeen?: string;
 }

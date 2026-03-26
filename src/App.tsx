@@ -9,6 +9,8 @@ import Wallet from './components/Wallet';
 import BotControl from './components/BotControl';
 import Chat from './components/Chat';
 import Management from './components/Management';
+import Onboarding from './components/Onboarding';
+import { Language, translations } from './translations';
 import { Shield, ArrowRight, TrendingUp, Lock, Mail, Key } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -56,6 +58,35 @@ export default function App() {
   });
 
   const [demoTimeLeft, setDemoTimeLeft] = useState<number>(7200);
+  const [language, setLanguage] = useState<Language>(() => {
+    return (localStorage.getItem('app_language') as Language) || 'en';
+  });
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (user && user.role === 'client' && !localStorage.getItem(`onboarding_completed_${user.uid}`)) {
+      setShowOnboarding(true);
+    }
+    
+    // Handle suspended status or redirect for activated users
+    if (user && user.role === 'client') {
+      if (user.status === 'suspended') {
+        handleLogout();
+        setLoginError('Your account has been suspended. Please contact support.');
+      } else if (user.isActivated && user.redirectUrl) {
+        window.location.href = user.redirectUrl;
+      }
+    }
+  }, [user]);
+
+  const handleOnboardingComplete = (lang: Language) => {
+    setLanguage(lang);
+    localStorage.setItem('app_language', lang);
+    if (user) {
+      localStorage.setItem(`onboarding_completed_${user.uid}`, 'true');
+    }
+    setShowOnboarding(false);
+  };
 
   useEffect(() => {
     if (user?.demoTimeLeft !== undefined) {
@@ -285,18 +316,18 @@ export default function App() {
   };
 
   const deleteUser = async (uid: string) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) return;
+    // In iFrame environments, window.confirm might be blocked.
+    // Proceeding directly for now, but in a real app, use a custom modal.
     try {
       const response = await fetch(`/api/admin/users/${uid}`, {
         method: 'DELETE'
       });
       const result = await response.json();
       if (result.success) {
-        alert('User deleted successfully');
         const users = await api.getUsers();
         setAllUsers(users);
       } else {
-        alert('Error: ' + result.error);
+        console.error('Error deleting user:', result.error);
       }
     } catch (e) {
       console.error(e);
@@ -550,21 +581,25 @@ export default function App() {
   const unreadMessagesCount = messages.filter(m => m.receiverId === user?.uid && !m.read).length;
 
   return (
-    <Layout 
-      activeTab={activeTab} 
-      setActiveTab={setActiveTab} 
-      user={user}
-      onLogout={handleLogout}
-      unreadMessagesCount={unreadMessagesCount}
-    >
+    <>
+      {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
+      <Layout 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        user={user}
+        onLogout={handleLogout}
+        unreadMessagesCount={unreadMessagesCount}
+        language={language}
+      >
       {activeTab === 'dashboard' && (
         <Dashboard 
           user={user} 
           transactions={transactions} 
           onViewAll={() => setActiveTab('wallet')} 
+          language={language}
         />
       )}
-      {activeTab === 'wallet' && <Wallet user={user} transactions={transactions} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
+      {activeTab === 'wallet' && <Wallet user={user} transactions={transactions} onDeposit={handleDeposit} onWithdraw={handleWithdraw} language={language} />}
       {activeTab === 'bot' && (
         <BotControl 
           user={user} 
@@ -574,8 +609,10 @@ export default function App() {
           availableAssets={assets}
           transactions={transactions}
           demoTimeLeft={demoTimeLeft}
+          language={language}
         />
       )}
+      {activeTab === 'trading' && <Trading user={user} assets={assets} onTrade={handleTrade} language={language} />}
       {activeTab === 'chat' && (
         <Chat 
           currentUser={user} 
@@ -586,6 +623,7 @@ export default function App() {
           onClearChat={handleClearChat}
           onMarkAsRead={handleMarkAsRead}
           allUsers={allUsers}
+          language={language}
           contacts={user.role === 'client' 
             ? [
                 ...allUsers.filter(u => u.uid === user.managerId),
@@ -605,8 +643,8 @@ export default function App() {
             : allUsers.filter(u => u.uid !== user.uid)
           }
         />
-      ) }
-          {(activeTab === 'admin' || activeTab === 'master') && (
+      )}
+      {(activeTab === 'admin' || activeTab === 'master') && (
             <Management 
               currentUser={user} 
               users={allUsers} 
@@ -641,28 +679,73 @@ export default function App() {
                 setTeams(teamsData);
               }}
               onDeleteUser={deleteUser}
+              onCreateTransaction={async (data) => {
+                await api.adminCreateTransaction(data);
+                const [users, txs] = await Promise.all([
+                  api.getUsers(),
+                  api.getTransactions()
+                ]);
+                setAllUsers(users);
+                setTransactions(txs);
+              }}
             />
           )}
       {activeTab === 'settings' && (
         <div className="bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
-          <h3 className="text-xl font-bold mb-6">Account Settings</h3>
-          <div className="space-y-6 max-w-md">
-            <div>
-              <label className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 block">Display Name</label>
-              <input 
-                type="text" 
-                value={user.displayName}
-                onChange={async (e) => {
-                  const newName = e.target.value;
-                  setUser({...user, displayName: newName});
-                  await fetch(`/api/admin/update-user/${user.uid}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ displayName: newName })
-                  });
-                }}
-                className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl font-medium focus:ring-2 focus:ring-[#FF0000]/20"
-              />
+          <h3 className="text-xl font-bold mb-6">{translations[language].settings}</h3>
+          <div className="space-y-8 max-w-md">
+            <div className="space-y-4">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">{translations[language].select_language}</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { code: 'en', label: 'English' },
+                  { code: 'es', label: 'Español' },
+                  { code: 'fr', label: 'Français' },
+                  { code: 'de', label: 'Deutsch' },
+                  { code: 'it', label: 'Italiano' },
+                  { code: 'pt', label: 'Português' },
+                  { code: 'ru', label: 'Русский' },
+                ].map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => {
+                      setLanguage(lang.code as Language);
+                      localStorage.setItem('app_language', lang.code);
+                    }}
+                    className={cn(
+                      "px-4 py-3 rounded-xl font-bold text-sm transition-all border-2",
+                      language === lang.code 
+                        ? "border-[#FF0000] bg-red-50 text-[#FF0000]" 
+                        : "border-gray-100 hover:border-gray-200 text-gray-600"
+                    )}
+                  >
+                    {lang.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Account Settings</h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 block">Display Name</label>
+                  <input 
+                    type="text" 
+                    value={user.displayName}
+                    onChange={async (e) => {
+                      const newName = e.target.value;
+                      setUser({...user, displayName: newName});
+                      await fetch(`/api/admin/update-user/${user.uid}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ displayName: newName })
+                      });
+                    }}
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl font-medium focus:ring-2 focus:ring-[#FF0000]/20"
+                  />
+                </div>
+              </div>
             </div>
             <div>
               <label className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 block">Email Address</label>
@@ -712,5 +795,6 @@ export default function App() {
         </div>
       )}
     </Layout>
+    </>
   );
 }

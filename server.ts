@@ -25,6 +25,7 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: String, required: true },
   status: { type: String, default: 'active' },
   isActivated: { type: Boolean, default: false },
+  redirectUrl: { type: String, default: null },
   demoTimeLeft: { type: Number, default: 7200 },
   lastSeen: { type: String, default: () => new Date().toISOString() }
 });
@@ -110,7 +111,7 @@ async function startServer() {
   // Connect to MongoDB
   try {
     await mongoose.connect(MONGODB_URI);
-    console.log("Connected to MongoDB");
+    console.log("Connected to MongoDB successfully");
     
     // Ensure assets are initialized
     if ((await Asset.countDocuments()) === 0) {
@@ -119,11 +120,20 @@ async function startServer() {
     }
   } catch (e) {
     console.error("MongoDB connection failed:", e);
-    process.exit(1);
+    // Do not exit, allow server to start so we can diagnose
   }
 
   app.use(express.json());
   app.use(cookieParser());
+
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ 
+      status: "ok", 
+      mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+      timestamp: new Date().toISOString()
+    });
+  });
 
   // Bot Simulation Background Task
   setInterval(async () => {
@@ -282,6 +292,7 @@ async function startServer() {
       const { email, password } = req.body;
       const user = await User.findOne({ email, password });
       if (!user) return res.status(401).json({ error: "Invalid credentials" });
+      if (user.status === 'suspended') return res.status(403).json({ error: "Account suspended" });
       
       res.cookie("userId", user.uid, { httpOnly: true, sameSite: 'none', secure: true });
       const userObj = user.toObject();
@@ -303,6 +314,12 @@ async function startServer() {
       if (!userId) return res.status(401).json({ error: "Not logged in" });
       const user = await User.findOne({ uid: userId });
       if (!user) return res.status(401).json({ error: "User not found" });
+      
+      if (user.status === 'suspended') {
+        res.clearCookie("userId");
+        return res.status(403).json({ error: "Account suspended" });
+      }
+
       const userObj = user.toObject();
       delete userObj.password;
       res.json({ user: userObj });
@@ -323,7 +340,14 @@ async function startServer() {
 
   app.get("/api/transactions", authMiddleware, async (req: any, res) => {
     try {
-      const userTxs = await Transaction.find({ userId: req.user.uid });
+      let query: any = { userId: req.user.uid };
+      if (req.user.role !== 'client') {
+        // Admins, Masters, Managers, and Team Leads can see more transactions
+        // For simplicity and to fix the "Activity Log" showing nothing, we return all transactions
+        // In a larger app, we would filter by managed users/teams
+        query = {};
+      }
+      const userTxs = await Transaction.find(query);
       res.json(userTxs);
     } catch (e) {
       res.status(500).json({ error: "Internal server error" });
@@ -347,11 +371,59 @@ async function startServer() {
         else if (tx.type === 'sell') user.balance += tx.amount;
         else if (tx.type === 'deposit') user.balance += tx.amount;
         else if (tx.type === 'withdrawal') user.balance -= tx.amount;
+        else if (tx.type === 'bonus') user.balance += tx.amount;
+        else if (tx.type === 'transfer') user.balance += tx.amount;
         await user.save();
       }
 
       res.json(tx);
     } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/transactions", authMiddleware, async (req: any, res) => {
+    try {
+      const currentUser = req.user;
+      if (currentUser.role === 'client') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const { userId, type, amount, asset, price, status } = req.body;
+      
+      const targetUser = await User.findOne({ uid: userId });
+      if (!targetUser) {
+        return res.status(404).json({ error: "Target user not found" });
+      }
+
+      // If manager, check if client belongs to them
+      if (currentUser.role === 'manager' && targetUser.managerId !== currentUser.uid) {
+        return res.status(403).json({ error: "Forbidden: Not your client" });
+      }
+
+      const tx = new Transaction({
+        id: Math.random().toString(36).substring(2, 15),
+        userId,
+        type,
+        amount,
+        asset,
+        price,
+        status: status || 'completed',
+        timestamp: new Date().toISOString()
+      });
+      await tx.save();
+
+      // Update target user balance
+      if (type === 'deposit' || type === 'bonus' || type === 'sell' || type === 'transfer') {
+        targetUser.balance += amount;
+      } else if (type === 'withdrawal' || type === 'buy') {
+        targetUser.balance -= amount;
+      }
+      await targetUser.save();
+
+      res.json(tx);
+    } catch (e) {
+      console.error("Admin transaction failed", e);
       res.status(500).json({ error: "Internal server error" });
     }
   });

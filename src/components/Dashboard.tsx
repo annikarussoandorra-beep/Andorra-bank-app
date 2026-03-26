@@ -21,17 +21,20 @@ import {
 } from 'recharts';
 import { cn } from '../lib/utils';
 import { UserProfile, Transaction } from '../types';
+import { Language, translations } from '../translations';
 
 interface DashboardProps {
   user: UserProfile;
   transactions: Transaction[];
   onViewAll?: () => void;
+  language: Language;
 }
 
 type Timeframe = '1W' | '1M' | '1Y';
 
-export default function Dashboard({ user, transactions, onViewAll }: DashboardProps) {
+export default function Dashboard({ user, transactions, onViewAll, language }: DashboardProps) {
   const [timeframe, setTimeframe] = useState<Timeframe>('1W');
+  const t = translations[language];
   const safeTransactions = Array.isArray(transactions) ? [...transactions] : [];
   
   // Sort transactions by date descending for recent activity
@@ -150,7 +153,7 @@ export default function Dashboard({ user, transactions, onViewAll }: DashboardPr
               <Clock size={20} className="lg:w-6 lg:h-6" />
             </div>
           </div>
-          <p className="text-xs lg:text-sm text-gray-500 mb-1">Pending Orders</p>
+          <p className="text-xs lg:text-sm text-gray-500 mb-1">{t.trades}</p>
           <h3 className="text-xl lg:text-2xl font-bold">{activeTrades}</h3>
         </div>
       </div>
@@ -198,27 +201,27 @@ export default function Dashboard({ user, transactions, onViewAll }: DashboardPr
 
         {/* Recent Transactions */}
         <div className="bg-white p-4 lg:p-8 rounded-2xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold mb-6">Recent Activity</h3>
+          <h3 className="text-lg font-semibold mb-6">{t.recent_activity}</h3>
           <div className="space-y-4 lg:space-y-6">
             {sortedTransactions.slice(0, 5).map((tx) => (
               <div key={tx.id} className="flex items-center justify-between">
                 <div className="flex items-center gap-3 lg:gap-4">
                   <div className={cn(
                     "p-2 rounded-xl",
-                    tx.type === 'deposit' || tx.type === 'sell' ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                    ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
                   )}>
-                    {tx.type === 'deposit' || tx.type === 'sell' ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+                    {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
                   </div>
                   <div>
-                    <p className="text-xs lg:text-sm font-medium capitalize truncate max-w-[100px] sm:max-w-none">{tx.type} {tx.asset}</p>
+                    <p className="text-xs lg:text-sm font-medium capitalize truncate max-w-[100px] sm:max-w-none">{translations[language][tx.type as keyof typeof translations['en']] || tx.type} {tx.asset}</p>
                     <p className="text-[10px] lg:text-xs text-gray-500">{tx.timestamp ? new Date(tx.timestamp).toLocaleDateString() : 'N/A'}</p>
                   </div>
                 </div>
                 <p className={cn(
                   "text-sm lg:text-base font-semibold",
-                  tx.type === 'deposit' || tx.type === 'sell' ? "text-green-600" : "text-red-600"
+                  ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "text-green-600" : "text-red-600"
                 )}>
-                  {tx.type === 'deposit' || tx.type === 'sell' ? '+' : '-'}{(tx.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? '+' : '-'}{(tx.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
             ))}

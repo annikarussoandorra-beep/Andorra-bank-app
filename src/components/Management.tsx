@@ -38,9 +38,10 @@ interface ManagementProps {
   onCreateTeam: (data: any) => void;
   onUpdateTeam: (id: string, data: Partial<Team>) => void;
   onDeleteUser: (uid: string) => void;
+  onCreateTransaction: (data: any) => Promise<void>;
 }
 
-export default function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteUser }: ManagementProps) {
+export default function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteUser, onCreateTransaction }: ManagementProps) {
   const [view, setView] = useState<'list' | 'grid'>('list');
   const [managementTab, setManagementTab] = useState<'clients' | 'staff' | 'teams'>('clients');
   const [search, setSearch] = useState('');
@@ -95,6 +96,9 @@ export default function Management({ currentUser, users, teams, transactions, on
   });
 
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [activatingUser, setActivatingUser] = useState<UserProfile | null>(null);
+  const [redirectUrl, setRedirectUrl] = useState('');
   const [transactionUser, setTransactionUser] = useState<UserProfile | null>(null);
   const [transactionData, setTransactionData] = useState({
     type: 'bonus',
@@ -107,7 +111,7 @@ export default function Management({ currentUser, users, teams, transactions, on
     if (!transactionUser) return;
     
     try {
-      await api.adminCreateTransaction({
+      await onCreateTransaction({
         userId: transactionUser.uid,
         ...transactionData
       });
@@ -511,7 +515,14 @@ export default function Management({ currentUser, users, teams, transactions, on
                                 <Activity size={18} />
                               </button>
                               <button 
-                                onClick={() => onUpdateUser(user.uid, { isActivated: !user.isActivated })}
+                                onClick={() => {
+                                  if (!user.isActivated) {
+                                    setActivatingUser(user);
+                                    setRedirectUrl('');
+                                  } else {
+                                    onUpdateUser(user.uid, { isActivated: false, redirectUrl: null });
+                                  }
+                                }}
                                 className={cn(
                                   "p-2 rounded-xl transition-colors",
                                   user.isActivated ? "hover:bg-orange-50 text-orange-600" : "hover:bg-green-50 text-green-600"
@@ -522,7 +533,7 @@ export default function Management({ currentUser, users, teams, transactions, on
                               </button>
                               {!user.isActivated && (
                                 <button 
-                                  onClick={() => onUpdateUser(user.uid, { demoTimeLeft: 24 * 60 * 60 * 1000 })}
+                                  onClick={() => onUpdateUser(user.uid, { demoTimeLeft: 7200 })}
                                   className="p-2 hover:bg-purple-50 text-purple-600 rounded-xl transition-colors"
                                   title="Reset Demo Timer"
                                 >
@@ -537,8 +548,11 @@ export default function Management({ currentUser, users, teams, transactions, on
                           >
                             <Edit2 size={18} />
                           </button>
-                          {currentUser.role === 'admin' && (
-                            <button className="p-2 hover:bg-red-50 text-red-600 rounded-xl transition-colors">
+                          {(currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'team_lead') && (
+                            <button 
+                              onClick={() => setUserToDelete(user)}
+                              className="p-2 hover:bg-red-50 text-red-600 rounded-xl transition-colors"
+                            >
                               <Trash2 size={18} />
                             </button>
                           )}
@@ -579,7 +593,14 @@ export default function Management({ currentUser, users, teams, transactions, on
                     </div>
                     <div className="flex items-center gap-2">
                       <button 
-                        onClick={() => onUpdateUser(user.uid, { isActivated: !user.isActivated })}
+                        onClick={() => {
+                          if (!user.isActivated) {
+                            setActivatingUser(user);
+                            setRedirectUrl('');
+                          } else {
+                            onUpdateUser(user.uid, { isActivated: false, redirectUrl: null });
+                          }
+                        }}
                         className={cn("p-2 rounded-xl", user.isActivated ? "text-green-600 bg-green-50" : "text-gray-400")}
                         title={user.isActivated ? "Deactivate Account" : "Activate Account"}
                       >
@@ -612,12 +633,14 @@ export default function Management({ currentUser, users, teams, transactions, on
                       >
                         <Edit2 size={16} />
                       </button>
-                      <button 
-                        onClick={() => onDeleteUser(user.uid)}
-                        className="p-2 text-gray-400 hover:text-red-600"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {(currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'team_lead') && (
+                        <button 
+                          onClick={() => setUserToDelete(user)}
+                          className="p-2 text-gray-400 hover:text-red-600"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -658,7 +681,14 @@ export default function Management({ currentUser, users, teams, transactions, on
                             <Edit2 size={16} className="text-gray-400" /> Edit Account
                           </button>
                           <button 
-                            onClick={() => onUpdateUser(user.uid, { isActivated: !user.isActivated })}
+                            onClick={() => {
+                              if (!user.isActivated) {
+                                setActivatingUser(user);
+                                setRedirectUrl('');
+                              } else {
+                                onUpdateUser(user.uid, { isActivated: false, redirectUrl: null });
+                              }
+                            }}
                             className="w-full px-4 py-2 text-left text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-3"
                           >
                             <Shield size={16} className="text-gray-400" /> {user.isActivated ? 'Deactivate' : 'Activate'}
@@ -676,12 +706,14 @@ export default function Management({ currentUser, users, teams, transactions, on
                             <Lock size={16} className="text-gray-400" /> {user.status === 'active' ? 'Suspend' : 'Unsuspend'}
                           </button>
                           <div className="h-px bg-gray-100 my-2" />
-                          <button 
-                            onClick={() => onDeleteUser(user.uid)}
-                            className="w-full px-4 py-2 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-3"
-                          >
-                            <Trash2 size={16} /> Delete Account
-                          </button>
+                          {(currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'team_lead') && (
+                            <button 
+                              onClick={() => setUserToDelete(user)}
+                              className="w-full px-4 py-2 text-left text-sm font-bold text-red-600 hover:bg-red-50 flex items-center gap-3"
+                            >
+                              <Trash2 size={16} /> Delete Account
+                            </button>
+                          )}
                         </motion.div>
                       )}
                     </AnimatePresence>
@@ -756,9 +788,9 @@ export default function Management({ currentUser, users, teams, transactions, on
                       <div className="flex items-center gap-4">
                         <div className={cn(
                           "p-2 rounded-xl",
-                          tx.type === 'deposit' || tx.type === 'sell' ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
+                          ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"
                         )}>
-                          {tx.type === 'deposit' || tx.type === 'sell' ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+                          {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
                         </div>
                         <div>
                           <p className="font-bold text-sm capitalize">{tx.type} {tx.asset}</p>
@@ -768,9 +800,9 @@ export default function Management({ currentUser, users, teams, transactions, on
                       <div className="text-right">
                         <p className={cn(
                           "font-bold",
-                          tx.type === 'deposit' || tx.type === 'sell' ? "text-green-600" : "text-red-600"
+                          ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "text-green-600" : "text-red-600"
                         )}>
-                          {tx.type === 'deposit' || tx.type === 'sell' ? '+' : '-'}{tx.amount.toLocaleString()} {viewingUserTxs.currency}
+                          {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? '+' : '-'}{tx.amount.toLocaleString()} {viewingUserTxs.currency}
                         </p>
                         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{tx.status}</span>
                       </div>
@@ -870,11 +902,11 @@ export default function Management({ currentUser, users, teams, transactions, on
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Demo Time (sec)</label>
+                      <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Demo Time (min)</label>
                       <input 
                         type="number" 
-                        value={newUser.demoTimeLeft}
-                        onChange={(e) => setNewUser({...newUser, demoTimeLeft: Number(e.target.value)})}
+                        value={(newUser.demoTimeLeft || 0) / 60}
+                        onChange={(e) => setNewUser({...newUser, demoTimeLeft: Number(e.target.value) * 60})}
                         className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
                       />
                     </div>
@@ -1009,11 +1041,11 @@ export default function Management({ currentUser, users, teams, transactions, on
                         />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Demo Time (sec)</label>
+                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Demo Time (min)</label>
                         <input 
                           type="number" 
-                          value={editingUser.demoTimeLeft}
-                          onChange={(e) => setEditingUser({...editingUser, demoTimeLeft: Number(e.target.value)})}
+                          value={(editingUser.demoTimeLeft || 0) / 60}
+                          onChange={(e) => setEditingUser({...editingUser, demoTimeLeft: Number(e.target.value) * 60})}
                           className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
                         />
                       </div>
@@ -1046,6 +1078,18 @@ export default function Management({ currentUser, users, teams, transactions, on
                     </div>
                   )}
                 </div>
+                {editingUser.isActivated && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Redirect URL</label>
+                    <input 
+                      type="url" 
+                      value={editingUser.redirectUrl || ''}
+                      onChange={(e) => setEditingUser({...editingUser, redirectUrl: e.target.value})}
+                      className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                      placeholder="https://example.com/dashboard"
+                    />
+                  </div>
+                )}
                 {editingUser.role !== 'client' && (
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Assign to Team</label>
@@ -1303,6 +1347,101 @@ export default function Management({ currentUser, users, teams, transactions, on
                 Save Changes
               </button>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Activation Modal */}
+      {activatingUser && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold">Activate Account</h3>
+              <button onClick={() => setActivatingUser(null)} className="p-2 hover:bg-gray-100 rounded-xl">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="space-y-6">
+              <p className="text-gray-600">
+                Enter the redirect URL for <span className="font-bold text-gray-900">{activatingUser.displayName}</span>. Once activated, the client will be automatically redirected to this URL.
+              </p>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Redirect URL</label>
+                <input 
+                  type="url" 
+                  required
+                  value={redirectUrl}
+                  onChange={(e) => setRedirectUrl(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                  placeholder="https://example.com/dashboard"
+                />
+              </div>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setActivatingUser(null)}
+                  className="flex-1 py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    if (!redirectUrl) {
+                      alert('Please enter a redirect URL');
+                      return;
+                    }
+                    onUpdateUser(activatingUser.uid, { isActivated: true, redirectUrl });
+                    setActivatingUser(null);
+                  }}
+                  className="flex-1 py-4 bg-green-600 text-white rounded-2xl font-bold hover:bg-green-700 transition-all shadow-xl shadow-green-500/20"
+                >
+                  Activate
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold">Delete Account</h3>
+              <button onClick={() => setUserToDelete(null)} className="p-2 hover:bg-gray-100 rounded-xl">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="space-y-6">
+              <p className="text-gray-600">
+                Are you sure you want to delete the account for <span className="font-bold text-gray-900">{userToDelete.displayName}</span>? This action cannot be undone.
+              </p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setUserToDelete(null)}
+                  className="flex-1 py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    onDeleteUser(userToDelete.uid);
+                    setUserToDelete(null);
+                  }}
+                  className="flex-1 py-4 bg-[#FF0000] text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-xl shadow-red-500/20"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
           </motion.div>
         </div>
       )}

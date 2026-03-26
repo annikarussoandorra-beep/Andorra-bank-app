@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { cn } from '../lib/utils';
 import { Asset, UserProfile } from '../types';
+import { Language, translations } from '../translations';
 
 const generateMockData = (base: number) => {
   return Array.from({ length: 20 }, (_, i) => ({
@@ -32,10 +33,12 @@ interface TradingProps {
   user: UserProfile;
   assets: Asset[];
   onTrade: (asset: Asset, type: 'buy' | 'sell', amount: number) => void;
+  language: Language;
 }
 
-export default function Trading({ user, assets, onTrade }: TradingProps) {
+export default function Trading({ user, assets, onTrade, language }: TradingProps) {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(Array.isArray(assets) && assets.length > 0 ? assets[0] : null);
+  const t = translations[language];
   const [tradeAmount, setTradeAmount] = useState<number>(0);
   const [chartData, setChartData] = useState(generateMockData(selectedAsset?.currentPrice || 1000));
 
@@ -104,7 +107,7 @@ export default function Trading({ user, assets, onTrade }: TradingProps) {
         {/* Balance Header */}
         <div className="bg-white p-4 lg:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
           <div>
-            <p className="text-[10px] lg:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Available Balance</p>
+            <p className="text-[10px] lg:text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">{t.balance}</p>
             <h3 className="text-xl lg:text-2xl font-bold text-gray-900">
               {user.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
             </h3>

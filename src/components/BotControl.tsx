@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { BotConfig, UserProfile, Asset, Transaction } from '../types';
+import { Language, translations } from '../translations';
 
 interface BotControlProps {
   user: UserProfile;
@@ -29,10 +30,12 @@ interface BotControlProps {
   availableAssets: Asset[];
   transactions: Transaction[];
   demoTimeLeft: number;
+  language: Language;
 }
 
-export default function BotControl({ user, config, onUpdateConfig, availableAssets, transactions, demoTimeLeft }: BotControlProps) {
+export default function BotControl({ user, config, onUpdateConfig, availableAssets, transactions, demoTimeLeft, language }: BotControlProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const t = translations[language];
   const [showShareModal, setShowShareModal] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -139,7 +142,7 @@ export default function BotControl({ user, config, onUpdateConfig, availableAsse
       {/* Balance Header */}
       <div className="bg-white p-4 lg:p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between">
         <div>
-          <p className="text-[10px] lg:text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">Available Balance</p>
+          <p className="text-[10px] lg:text-xs text-gray-500 uppercase font-bold tracking-widest mb-1">{t.balance}</p>
           <div className="flex items-baseline gap-2">
             <h3 className="text-xl lg:text-3xl font-bold text-gray-900">
               {user.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -163,13 +166,13 @@ export default function BotControl({ user, config, onUpdateConfig, availableAsse
               <Bot size={32} className="lg:w-10 lg:h-10 text-white" />
             </div>
               <div>
-                <h2 className="text-xl lg:text-3xl font-bold mb-1 lg:mb-2">Andorra AI Bot</h2>
+                <h2 className="text-xl lg:text-3xl font-bold mb-1 lg:mb-2">{t.ai_trading_bot}</h2>
                 <div className="flex flex-wrap items-center gap-2 lg:gap-3">
                   <span className={cn(
                     "px-2 lg:px-3 py-0.5 lg:py-1 rounded-full text-[10px] lg:text-xs font-bold uppercase tracking-widest",
                     config.active ? "bg-green-500/20 text-green-400" : "bg-gray-600 text-gray-400"
                   )}>
-                    {config.active ? 'Running' : 'Paused'}
+                    {config.active ? t.active : t.inactive}
                   </span>
                   {config.active && (
                     <div className="flex items-center gap-1.5 px-2 lg:px-3 py-0.5 lg:py-1 bg-white/10 rounded-full border border-white/20">
@@ -179,12 +182,12 @@ export default function BotControl({ user, config, onUpdateConfig, availableAsse
                       </span>
                     </div>
                   )}
-                  <span className="text-xs lg:text-sm text-gray-400">Strategy: <span className="text-white font-medium capitalize">{config.strategy}</span></span>
+                  <span className="text-xs lg:text-sm text-gray-400">{t.strategy}: <span className="text-white font-medium capitalize">{config.strategy}</span></span>
                   {user.isActivated ? (
                     <div className="flex items-center gap-2 px-3 py-1 bg-green-500/20 rounded-full border border-green-500/30">
                       <Shield size={12} className="text-green-400" />
                       <span className="text-[10px] lg:text-xs font-bold text-green-400 uppercase">
-                        Account Activated
+                        {t.account_activated}
                       </span>
                     </div>
                   ) : localDemoTime > 0 ? (

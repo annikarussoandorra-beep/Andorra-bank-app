@@ -18,6 +18,7 @@ import {
 import { ChatMessage, UserProfile } from '../types';
 import { cn } from '../lib/utils';
 import { api } from '../firebase';
+import { Language, translations } from '../translations';
 
 interface ChatProps {
   currentUser: UserProfile;
@@ -29,6 +30,7 @@ interface ChatProps {
   onMarkAsRead: (senderId: string) => void;
   contacts: UserProfile[];
   allUsers: UserProfile[];
+  language: Language;
 }
 
 export default function Chat({ 
@@ -40,9 +42,11 @@ export default function Chat({
   onClearChat,
   onMarkAsRead,
   contacts, 
-  allUsers 
+  allUsers,
+  language
 }: ChatProps) {
   const [inputText, setInputText] = useState('');
+  const t = translations[language];
   const [selectedContact, setSelectedContact] = useState<UserProfile | null>(contacts[0] || null);
   const [showMobileChat, setShowMobileChat] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -59,6 +63,15 @@ export default function Chat({
   const lastMessageCount = useRef(messages.length);
 
   const emojis = ['😊', '😂', '🥰', '👍', '🔥', '🚀', '💰', '📈', '🤝', '🙌', '✨', '✅'];
+
+  useEffect(() => {
+    if (selectedContact) {
+      const hasUnread = messages.some(m => m.senderId === selectedContact.uid && m.receiverId === currentUser.uid && !m.read);
+      if (hasUnread) {
+        onMarkAsRead(selectedContact.uid);
+      }
+    }
+  }, [selectedContact, messages, currentUser.uid, onMarkAsRead]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -163,12 +176,12 @@ export default function Chat({
         showMobileChat ? "hidden md:flex" : "flex"
       )}>
         <div className="p-4 lg:p-6 border-b border-gray-100">
-          <h3 className="text-lg lg:text-xl font-bold mb-4">Messages</h3>
+          <h3 className="text-lg lg:text-xl font-bold mb-4">{t.messages}</h3>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
               type="text" 
-              placeholder="Search chats..." 
+              placeholder={t.search}
               className="w-full pl-9 pr-4 py-2 bg-gray-50 border-none rounded-xl text-xs lg:text-sm focus:ring-2 focus:ring-[#FF0000]/20"
             />
           </div>

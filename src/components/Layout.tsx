@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 
 import { UserProfile } from '../types';
+import { Language, translations } from '../translations';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -25,24 +26,34 @@ interface LayoutProps {
   user: UserProfile;
   onLogout: () => void;
   unreadMessagesCount?: number;
+  language: Language;
 }
 
-export default function Layout({ children, activeTab, setActiveTab, user, onLogout, unreadMessagesCount = 0 }: LayoutProps) {
+export default function Layout({ 
+  children, 
+  activeTab, 
+  setActiveTab, 
+  user, 
+  onLogout, 
+  unreadMessagesCount = 0,
+  language
+}: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const userRole = user.role;
+  const t = translations[language];
 
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
   };
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['client', 'manager', 'team_lead', 'admin'] },
-    { id: 'wallet', label: 'Wallet', icon: Wallet, roles: ['client'] },
-    { id: 'bot', label: 'Auto-Bot', icon: Bot, roles: ['client'] },
-    { id: 'chat', label: 'Messages', icon: MessageSquare, roles: ['client', 'manager', 'team_lead', 'admin'] },
-    { id: 'admin', label: userRole === 'manager' ? 'Clients' : 'Management', icon: Users, roles: ['manager', 'team_lead', 'admin'] },
-    { id: 'settings', label: 'Settings', icon: Settings, roles: ['client', 'manager', 'team_lead', 'admin'] },
+    { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard, roles: ['client', 'manager', 'team_lead', 'admin'] },
+    { id: 'wallet', label: t.wallet, icon: Wallet, roles: ['client'] },
+    { id: 'bot', label: t.bot, icon: Bot, roles: ['client'] },
+    { id: 'chat', label: t.messages, icon: MessageSquare, roles: ['client', 'manager', 'team_lead', 'admin'] },
+    { id: 'admin', label: userRole === 'manager' ? (language === 'ru' ? 'Клиенты' : 'Clients') : t.management, icon: Users, roles: ['manager', 'team_lead', 'admin'] },
+    { id: 'settings', label: t.settings, icon: Settings, roles: ['client', 'manager', 'team_lead', 'admin'] },
   ];
 
   const filteredItems = menuItems.filter(item => item.roles.includes(userRole));
@@ -114,7 +125,7 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogo
           className="w-full flex items-center gap-4 p-3 rounded-lg hover:bg-white/10 transition-colors"
         >
           <LogOut size={22} className="text-white/80" />
-          {(isSidebarOpen || isMobileMenuOpen) && <span className="font-medium">Logout</span>}
+          {(isSidebarOpen || isMobileMenuOpen) && <span className="font-medium">{t.logout}</span>}
         </button>
       </div>
     </>

@@ -17,16 +17,19 @@ import {
 import { UserProfile, Transaction } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import { Language, translations } from '../translations';
 
 interface WalletProps {
   user: UserProfile;
   transactions: Transaction[];
   onDeposit: (amount: number) => void;
   onWithdraw: (amount: number) => void;
+  language: Language;
 }
 
-export default function Wallet({ user, transactions, onDeposit, onWithdraw }: WalletProps) {
+export default function Wallet({ user, transactions, onDeposit, onWithdraw, language }: WalletProps) {
   const [amount, setAmount] = useState<string>('0');
+  const t = translations[language];
   const [filter, setFilter] = useState<string>('all');
   const [activeAction, setActiveAction] = useState<'deposit' | 'withdraw' | null>(null);
   const [showWithdrawModal, setShowWithdrawModal] = useState<'bank' | 'mobile' | null>(null);
@@ -113,16 +116,16 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
                 </div>
               </div>
             </div>
-            <p className="text-sm lg:text-lg opacity-80 mb-2">Total Available Balance (EUR)</p>
+            <p className="text-sm lg:text-lg opacity-80 mb-2">{t.balance}</p>
             <h2 className="text-3xl lg:text-5xl font-bold mb-8 lg:mb-12">{user.balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</h2>
             <div className="flex items-center justify-between">
               <div className="flex gap-4 lg:gap-8">
                 <div>
-                  <p className="text-[8px] lg:text-xs opacity-60 uppercase mb-1">Account Holder</p>
+                  <p className="text-[8px] lg:text-xs opacity-60 uppercase mb-1">{t.account_holder}</p>
                   <p className="text-sm lg:text-base font-semibold">{user.displayName}</p>
                 </div>
                 <div>
-                  <p className="text-[8px] lg:text-xs opacity-60 uppercase mb-1">Expires</p>
+                  <p className="text-[8px] lg:text-xs opacity-60 uppercase mb-1">{t.expires}</p>
                   <p className="text-sm lg:text-base font-semibold">12/28</p>
                 </div>
               </div>
@@ -130,7 +133,7 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
                 onClick={handleDetailsClick}
                 className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors text-xs font-bold"
               >
-                <ExternalLink size={14} /> Details
+                <ExternalLink size={14} /> {t.details}
               </button>
             </div>
           </div>
@@ -140,7 +143,7 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
         </div>
 
         <div ref={quickActionsRef} className="bg-white p-6 lg:p-8 rounded-3xl shadow-sm border border-gray-100 flex flex-col justify-between">
-          <h3 className="text-lg font-semibold mb-6">Quick Actions</h3>
+          <h3 className="text-lg font-semibold mb-6">{t.quick_actions}</h3>
           <div className="space-y-4">
             <div className="relative">
               <input 
@@ -175,7 +178,7 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
                     : "bg-white text-gray-900 border-gray-100 hover:bg-gray-50"
                 )}
               >
-                <Plus size={18} /> Deposit
+                <Plus size={18} /> {t.deposit}
               </button>
               <button 
                 onClick={handleWithdrawClick}
@@ -186,7 +189,7 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
                     : "bg-white text-gray-900 border-gray-100 hover:bg-gray-50"
                 )}
               >
-                <Minus size={18} /> Withdraw
+                <Minus size={18} /> {t.withdraw}
               </button>
             </div>
           </div>
@@ -196,14 +199,14 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
               className="flex flex-col items-center gap-2 p-3 lg:p-4 hover:bg-gray-50 rounded-2xl transition-colors"
             >
               <Building2 size={20} className="lg:w-6 lg:h-6 text-blue-600" />
-              <span className="text-[10px] lg:text-xs font-medium">Bank Transfer</span>
+              <span className="text-[10px] lg:text-xs font-medium">{t.bank_transfer}</span>
             </button>
             <button 
               onClick={handleMobilePay}
               className="flex flex-col items-center gap-2 p-3 lg:p-4 hover:bg-gray-50 rounded-2xl transition-colors"
             >
               <Smartphone size={20} className="lg:w-6 lg:h-6 text-purple-600" />
-              <span className="text-[10px] lg:text-xs font-medium">Mobile Pay</span>
+              <span className="text-[10px] lg:text-xs font-medium">{t.mobile_pay}</span>
             </button>
           </div>
         </div>
@@ -299,7 +302,7 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
       {/* Transaction History */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 lg:p-8 border-b border-gray-50 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <h3 className="text-lg lg:text-xl font-bold">Transaction History</h3>
+          <h3 className="text-lg lg:text-xl font-bold">{t.recent_activity}</h3>
           <div className="flex flex-wrap items-center gap-2 lg:gap-4">
             <div className="flex-1 lg:flex-none relative min-w-[150px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -331,11 +334,11 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50/50 text-left">
-                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Transaction</th>
-                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Asset</th>
-                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Date</th>
-                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Amount</th>
+                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">{t.transaction}</th>
+                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">{t.asset}</th>
+                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">{t.date}</th>
+                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider">{t.status}</th>
+                <th className="px-8 py-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">{t.amount}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -345,11 +348,11 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "p-2 rounded-xl",
-                        tx.type === 'deposit' || tx.type === 'sell' ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                        ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
                       )}>
-                        {tx.type === 'deposit' || tx.type === 'sell' ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+                        {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
                       </div>
-                      <span className="font-semibold capitalize">{tx.type}</span>
+                      <span className="font-semibold capitalize">{translations[language][tx.type as keyof typeof translations['en']] || tx.type}</span>
                     </div>
                   </td>
                   <td className="px-8 py-6">
@@ -370,9 +373,9 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
                   <td className="px-8 py-6 text-right">
                     <span className={cn(
                       "font-bold text-lg",
-                      tx.type === 'deposit' || tx.type === 'sell' ? "text-green-600" : "text-red-600"
+                      ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "text-green-600" : "text-red-600"
                     )}>
-                      {tx.type === 'deposit' || tx.type === 'sell' ? '+' : '-'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                      {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? '+' : '-'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                     </span>
                   </td>
                 </tr>
@@ -389,9 +392,9 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
                 <div className="flex items-center gap-3">
                   <div className={cn(
                     "p-2 rounded-xl",
-                    tx.type === 'deposit' || tx.type === 'sell' ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                    ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
                   )}>
-                    {tx.type === 'deposit' || tx.type === 'sell' ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+                    {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
                   </div>
                   <div>
                     <p className="text-sm font-bold capitalize">{tx.type}</p>
@@ -410,9 +413,9 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw }: Wa
                 <span className="text-xs text-gray-500">Asset: <span className="text-gray-900 font-medium">{tx.asset || 'Cash'}</span></span>
                 <span className={cn(
                   "font-bold",
-                  tx.type === 'deposit' || tx.type === 'sell' ? "text-green-600" : "text-red-600"
+                  ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "text-green-600" : "text-red-600"
                 )}>
-                  {tx.type === 'deposit' || tx.type === 'sell' ? '+' : '-'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
+                  {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? '+' : '-'}{tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €
                 </span>
               </div>
             </div>
