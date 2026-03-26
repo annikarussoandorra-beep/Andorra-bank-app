@@ -1,0 +1,9 @@
+{
+  "name": "Andorra Bank Invest",
+  "description": "A professional banking and trading simulation platform with multi-level management access, real-time charts, and automated trading bots.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

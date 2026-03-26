@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Fields: uid, email, displayName, role, balance, currency, managerId, teamId, createdAt, status
+    //
+    // Collection: transactions
+    // Fields: id, userId, type, amount, asset, price, timestamp, status
+    //
+    // Collection: teams
+    // Fields: id, name, teamLeadId, createdAt
+    //
+    // Collection: chats
+    // Fields: id, senderId, receiverId, text, timestamp, read
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        getUserData().role == 'admin' || 
+        (request.auth.token.email == "eurosai.eu@gmail.com" && request.auth.token.email_verified == true)
+      );
+    }
+
+    function isTeamLead() {
+      return isAuthenticated() && getUserData().role == 'team_lead';
+    }
+
+    function isManager() {
+      return isAuthenticated() && getUserData().role == 'manager';
+    }
+
+    // Access logic for multi-level management
+    function canManageClient(clientData) {
+      let myData = getUserData();
+      return isAdmin() || 
+             (isTeamLead() && clientData.teamId == myData.teamId) ||
+             (isManager() && clientData.managerId == request.auth.uid);
+    }
+
+    // User Rules
+    match /users/{userId} {
+      allow read: if isOwner(userId) || canManageClient(resource.data);
+      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && request.resource.data.role == resource.data.role) || 
+        isAdmin() || 
+        (isTeamLead() && resource.data.teamId == getUserData().teamId)
+      );
+    }
+
+    // Transaction Rules
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && (
+        isOwner(resource.data.userId) || 
+        canManageClient(get(/databases/$(database)/documents/users/$(resource.data.userId)).data)
+      );
+      allow create: if isAuthenticated() && (isOwner(request.resource.data.userId) || isAdmin());
+    }
+
+    // Asset Rules (Publicly readable, but only admin can write)
+    match /assets/{assetId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Team Rules
+    match /teams/{teamId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Chat Rules
+    match /chats/{chatId}/messages/{messageId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.senderId || 
+        request.auth.uid == resource.data.receiverId ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.senderId
+      );
+    }
+
+    // Bot Rules
+    match /bots/{botId} {
+      allow read, write: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
+    }
+  }
+}

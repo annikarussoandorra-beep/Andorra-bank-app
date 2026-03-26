@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information including balance, role, and assigned manager.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["client", "manager", "team_lead", "admin"], "description": "User role for access control" },
+        "balance": { "type": "number", "description": "Current account balance" },
+        "currency": { "type": "string", "description": "Account currency (e.g., EUR)" },
+        "managerId": { "type": "string", "description": "UID of the assigned manager (for clients)" },
+        "teamId": { "type": "string", "description": "ID of the team the manager belongs to" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "suspended"] }
+      },
+      "required": ["uid", "email", "role", "balance"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial transaction record (deposit, withdrawal, trade).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["deposit", "withdrawal", "buy", "sell"] },
+        "amount": { "type": "number" },
+        "asset": { "type": "string", "description": "Asset symbol (e.g., BTC, AAPL) if trade" },
+        "price": { "type": "number", "description": "Asset price at time of trade" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] }
+      },
+      "required": ["userId", "type", "amount", "timestamp"]
+    },
+    "Asset": {
+      "title": "Asset",
+      "description": "Tradable asset information.",
+      "type": "object",
+      "properties": {
+        "symbol": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["crypto", "stock", "forex"] },
+        "currentPrice": { "type": "number" },
+        "change24h": { "type": "number" }
+      },
+      "required": ["symbol", "name", "type", "currentPrice"]
+    },
+    "Team": {
+      "title": "Team",
+      "description": "A group of managers led by a Team Lead.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "teamLeadId": { "type": "string", "description": "UID of the Team Lead" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "teamLeadId"]
+    },
+    "ChatMessage": {
+      "title": "Chat Message",
+      "description": "Message in a support chat between client and manager.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["senderId", "receiverId", "text", "timestamp"]
+    },
+    "BotConfig": {
+      "title": "Bot Configuration",
+      "description": "Settings for automated trading bots.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "active": { "type": "boolean" },
+        "strategy": { "type": "string", "enum": ["conservative", "aggressive"] },
+        "maxInvestment": { "type": "number" },
+        "assets": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["userId", "active", "strategy"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Global transaction history"
+    },
+    "/assets/{assetId}": {
+      "schema": "Asset",
+      "description": "Available assets for trading"
+    },
+    "/teams/{teamId}": {
+      "schema": "Team",
+      "description": "Management teams"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Chat messages between users"
+    },
+    "/bots/{botId}": {
+      "schema": "BotConfig",
+      "description": "Trading bot configurations"
+    }
+  }
+}
