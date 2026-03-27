@@ -168,6 +168,16 @@ export const api = {
     }
     return res.json();
   },
+  deleteTransaction: async (id: string) => {
+    const res = await fetch(`/api/admin/transactions/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Delete failed' }));
+      throw new Error(error.error || 'Delete failed');
+    }
+    return res.json();
+  },
   getUser: async (uid: string): Promise<UserProfile | null> => {
     try {
       const res = await fetch(`/api/users/${uid}`);

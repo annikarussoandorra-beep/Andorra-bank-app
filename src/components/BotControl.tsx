@@ -33,7 +33,7 @@ interface BotControlProps {
   language: Language;
 }
 
-export default function BotControl({ user, config, onUpdateConfig, availableAssets, transactions, demoTimeLeft, language }: BotControlProps) {
+export default React.memo(function BotControl({ user, config, onUpdateConfig, availableAssets, transactions, demoTimeLeft, language }: BotControlProps) {
   const [isEditing, setIsEditing] = useState(false);
   const t = translations[language];
   const [showShareModal, setShowShareModal] = useState(false);
@@ -506,3 +506,4 @@ export default function BotControl({ user, config, onUpdateConfig, availableAsse
     </div>
   );
 }
+);

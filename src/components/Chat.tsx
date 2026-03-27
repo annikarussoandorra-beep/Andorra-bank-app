@@ -26,14 +26,14 @@ interface ChatProps {
   onSendMessage: (receiverId: string, data: Partial<ChatMessage>) => void;
   onDeleteMessage: (id: string) => void;
   onEditMessage: (id: string, text: string) => void;
-  onClearChat: (contactId: string) => void;
-  onMarkAsRead: (senderId: string) => void;
+  onClearChat: (contactId: string, asSupport?: boolean) => void;
+  onMarkAsRead: (senderId: string, receiverId?: string) => void;
   contacts: UserProfile[];
   allUsers: UserProfile[];
   language: Language;
 }
 
-export default function Chat({ 
+export default React.memo(function Chat({ 
   currentUser, 
   messages, 
   onSendMessage, 
@@ -48,6 +48,7 @@ export default function Chat({
   const [inputText, setInputText] = useState('');
   const t = translations[language];
   const [selectedContact, setSelectedContact] = useState<UserProfile | null>(contacts[0] || null);
+  const [chatTab, setChatTab] = useState<'direct' | 'support'>('direct');
   const [showMobileChat, setShowMobileChat] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -61,17 +62,19 @@ export default function Chat({
   const [paymentData, setPaymentData] = useState({ text: '', buttonLabel: '', url: '' });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const lastMessageCount = useRef(messages.length);
+  const isStaff = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'team_lead' || currentUser.role === 'master';
 
   const emojis = ['😊', '😂', '🥰', '👍', '🔥', '🚀', '💰', '📈', '🤝', '🙌', '✨', '✅'];
 
   useEffect(() => {
     if (selectedContact) {
-      const hasUnread = messages.some(m => m.senderId === selectedContact.uid && m.receiverId === currentUser.uid && !m.read);
+      const receiverId = (isStaff && chatTab === 'support') ? 'support-team' : currentUser.uid;
+      const hasUnread = messages.some(m => m.senderId === selectedContact.uid && m.receiverId === receiverId && !m.read);
       if (hasUnread) {
-        onMarkAsRead(selectedContact.uid);
+        onMarkAsRead(selectedContact.uid, receiverId);
       }
     }
-  }, [selectedContact, messages, currentUser.uid, onMarkAsRead]);
+  }, [selectedContact, messages, currentUser.uid, onMarkAsRead, isStaff, chatTab]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -97,50 +100,55 @@ export default function Chat({
     }
   }, [contacts, selectedContact]);
 
-  const handleSend = () => {
+  const handleSend = React.useCallback(() => {
     if (inputText.trim() && selectedContact) {
-      onSendMessage(selectedContact.uid, { text: inputText, type: 'text' });
+      const senderId = (isStaff && chatTab === 'support') ? 'support-team' : currentUser.uid;
+      onSendMessage(selectedContact.uid, { text: inputText, type: 'text', senderId });
       setInputText('');
       setShowEmojiPicker(false);
     }
-  };
+  }, [inputText, selectedContact, isStaff, chatTab, currentUser.uid, onSendMessage]);
 
-  const handleSendRequisites = () => {
+  const handleSendRequisites = React.useCallback(() => {
     if (requisitesText.trim() && selectedContact) {
+      const senderId = (isStaff && chatTab === 'support') ? 'support-team' : currentUser.uid;
       onSendMessage(selectedContact.uid, { 
         text: 'Bank Requisites', 
         type: 'requisites', 
-        requisites: requisitesText 
+        requisites: requisitesText,
+        senderId
       });
       setRequisitesText('');
       setShowSpecialModal(false);
     }
-  };
+  }, [requisitesText, selectedContact, isStaff, chatTab, currentUser.uid, onSendMessage]);
 
-  const handleSendPaymentLink = () => {
+  const handleSendPaymentLink = React.useCallback(() => {
     if (paymentData.text.trim() && paymentData.buttonLabel.trim() && paymentData.url.trim() && selectedContact) {
+      const senderId = (isStaff && chatTab === 'support') ? 'support-team' : currentUser.uid;
       onSendMessage(selectedContact.uid, { 
         text: paymentData.text, 
         type: 'payment_link', 
-        paymentLink: paymentData 
+        paymentLink: paymentData,
+        senderId
       });
       setPaymentData({ text: '', buttonLabel: '', url: '' });
       setShowSpecialModal(false);
     }
-  };
+  }, [paymentData, selectedContact, isStaff, chatTab, currentUser.uid, onSendMessage]);
 
-  const handleStartEdit = (msg: ChatMessage) => {
+  const handleStartEdit = React.useCallback((msg: ChatMessage) => {
     setEditingMessageId(msg.id);
     setEditingText(msg.text);
-  };
+  }, []);
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = React.useCallback(() => {
     if (editingMessageId && editingText.trim()) {
       onEditMessage(editingMessageId, editingText);
       setEditingMessageId(null);
       setEditingText('');
     }
-  };
+  }, [editingMessageId, editingText, onEditMessage]);
 
   const handleEmojiClick = (emoji: string) => {
     if (editingMessageId) {
@@ -157,7 +165,8 @@ export default function Chat({
     setShowChatMenu(false);
     
     // Mark messages as read
-    onMarkAsRead(contact.uid);
+    const receiverId = (isStaff && chatTab === 'support') ? 'support-team' : currentUser.uid;
+    onMarkAsRead(contact.uid, receiverId);
   };
 
   const copyToClipboard = (text: string, id: string) => {
@@ -165,8 +174,6 @@ export default function Chat({
     setCopySuccess(id);
     setTimeout(() => setCopySuccess(null), 2000);
   };
-
-  const isStaff = currentUser.role === 'admin' || currentUser.role === 'manager' || currentUser.role === 'team_lead' || currentUser.role === 'master';
 
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex h-[calc(100vh-12rem)] md:h-[calc(100vh-12rem)]">
@@ -177,6 +184,36 @@ export default function Chat({
       )}>
         <div className="p-4 lg:p-6 border-b border-gray-100">
           <h3 className="text-lg lg:text-xl font-bold mb-4">{t.messages}</h3>
+          
+          {isStaff && (
+            <div className="flex gap-2 mb-4 p-1 bg-gray-100 rounded-2xl">
+              <button 
+                onClick={() => setChatTab('direct')}
+                className={cn(
+                  "flex-1 py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2",
+                  chatTab === 'direct' ? "bg-white text-[#FF0000] shadow-sm" : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                Clients
+                {messages.filter(m => m.receiverId === currentUser.uid && !m.read).length > 0 && (
+                  <div className="w-2 h-2 bg-[#FF0000] rounded-full" />
+                )}
+              </button>
+              <button 
+                onClick={() => setChatTab('support')}
+                className={cn(
+                  "flex-1 py-2 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2",
+                  chatTab === 'support' ? "bg-white text-[#FF0000] shadow-sm" : "text-gray-500 hover:text-gray-700"
+                )}
+              >
+                Support
+                {messages.filter(m => m.receiverId === 'support-team' && !m.read).length > 0 && (
+                  <div className="w-2 h-2 bg-[#FF0000] rounded-full" />
+                )}
+              </button>
+            </div>
+          )}
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
@@ -187,13 +224,26 @@ export default function Chat({
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {contacts.map((contact) => {
+          {contacts.filter(contact => {
+            if (!isStaff) return true;
+            if (chatTab === 'direct') {
+              // Show direct clients (not support-team)
+              return contact.uid !== 'support-team';
+            } else {
+              // Show clients who have messaged support
+              const hasSupportMsgs = messages.some(m => 
+                (m.senderId === contact.uid && m.receiverId === 'support-team') ||
+                (m.senderId === 'support-team' && m.receiverId === contact.uid)
+              );
+              return hasSupportMsgs;
+            }
+          }).map((contact) => {
             const lastMsg = messages.filter(m => {
               const isDirect = (m.senderId === contact.uid && m.receiverId === currentUser.uid) ||
                              (m.senderId === currentUser.uid && m.receiverId === contact.uid);
-              const isSupport = (currentUser.role === 'admin' || currentUser.role === 'team_lead' || currentUser.role === 'master') && 
+              const isSupport = (chatTab === 'support' || !isStaff) && 
                                (m.senderId === contact.uid && m.receiverId === 'support-team');
-              const isSupportReply = (currentUser.role === 'admin' || currentUser.role === 'team_lead' || currentUser.role === 'master') &&
+              const isSupportReply = (chatTab === 'support' || !isStaff) &&
                                     (m.senderId === 'support-team' && m.receiverId === contact.uid);
               const isClientSupport = (currentUser.role === 'client' && contact.uid === 'support-team') &&
                                      (m.senderId === currentUser.uid && m.receiverId === 'support-team' ||
@@ -202,6 +252,14 @@ export default function Chat({
               
               return isDirect || isSupport || isSupportReply || isClientSupport;
             }).pop();
+
+            const unreadCount = messages.filter(m => {
+              if (chatTab === 'direct' || !isStaff) {
+                return m.senderId === contact.uid && m.receiverId === currentUser.uid && !m.read;
+              } else {
+                return m.senderId === contact.uid && m.receiverId === 'support-team' && !m.read;
+              }
+            }).length;
 
             return (
               <button
@@ -225,9 +283,9 @@ export default function Chat({
                   <span className="text-[8px] lg:text-[10px] text-gray-400">
                     {lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                   </span>
-                  {messages.filter(m => m.senderId === contact.uid && m.receiverId === currentUser.uid && !m.read).length > 0 && (
+                  {unreadCount > 0 && (
                     <div className="bg-[#FF0000] text-white text-[8px] lg:text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                      {messages.filter(m => m.senderId === contact.uid && m.receiverId === currentUser.uid && !m.read).length}
+                      {unreadCount}
                     </div>
                   )}
                 </div>
@@ -273,7 +331,7 @@ export default function Chat({
                     <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 overflow-hidden">
                       <button 
                         onClick={() => {
-                          onClearChat(selectedContact.uid);
+                          onClearChat(selectedContact.uid, isStaff && chatTab === 'support');
                           setShowChatMenu(false);
                         }}
                         className="w-full px-4 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"
@@ -608,4 +666,5 @@ export default function Chat({
     </div>
   );
 }
+);
 

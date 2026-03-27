@@ -16,7 +16,7 @@ interface OnboardingProps {
   onComplete: (language: Language) => void;
 }
 
-export default function Onboarding({ onComplete }: OnboardingProps) {
+export default React.memo(function Onboarding({ onComplete }: OnboardingProps) {
   const [step, setStep] = useState<'language' | 'tutorial'>('language');
   const [language, setLanguage] = useState<Language>('en');
   const [cardIndex, setCardIndex] = useState(0);
@@ -31,6 +31,8 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     { code: 'it', label: 'Italiano', flag: '🇮🇹' },
     { code: 'pt', label: 'Português', flag: '🇵🇹' },
     { code: 'ru', label: 'Русский', flag: '🇷🇺' },
+    { code: 'bg', label: 'Български', flag: '🇧🇬' },
+    { code: 'pl', label: 'Polski', flag: '🇵🇱' },
   ];
 
   const tutorialCards = [
@@ -79,9 +81,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
       <motion.div 
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl relative"
+        className="bg-white w-full max-w-md rounded-[2rem] overflow-hidden shadow-2xl relative"
       >
-        <div className="p-8 lg:p-12">
+        <div className="p-6 lg:p-10">
           <AnimatePresence mode="wait">
             {step === 'language' ? (
               <motion.div 
@@ -92,11 +94,11 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 className="space-y-8"
               >
                 <div className="text-center space-y-4">
-                  <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto">
-                    <Globe size={40} className="text-[#FF0000]" />
+                  <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
+                    <Globe size={32} className="text-[#FF0000]" />
                   </div>
-                  <h2 className="text-3xl font-bold text-gray-900">Choose Language</h2>
-                  <p className="text-gray-500">Select your preferred language to continue</p>
+                  <h2 className="text-2xl font-bold text-gray-900">Choose Language</h2>
+                  <p className="text-sm text-gray-500">Select your preferred language to continue</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -105,14 +107,14 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                       key={lang.code}
                       onClick={() => setLanguage(lang.code)}
                       className={cn(
-                        "flex items-center gap-3 p-4 rounded-2xl border-2 transition-all text-left",
+                        "flex items-center gap-2 p-3 rounded-xl border-2 transition-all text-left",
                         language === lang.code 
                           ? "border-[#FF0000] bg-red-50/50 text-[#FF0000]" 
                           : "border-gray-100 hover:border-gray-200 text-gray-600"
                       )}
                     >
-                      <span className="text-2xl">{lang.flag}</span>
-                      <span className="font-bold">{lang.label}</span>
+                      <span className="text-xl">{lang.flag}</span>
+                      <span className="font-bold text-sm">{lang.label}</span>
                     </button>
                   ))}
                 </div>
@@ -133,7 +135,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 exit={{ opacity: 0, x: -20 }}
                 className="space-y-8"
               >
-                <div className="flex justify-center gap-2 mb-8">
+                <div className="flex justify-center gap-2 mb-6">
                   {tutorialCards.map((_, i) => (
                     <div 
                       key={i}
@@ -154,17 +156,17 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                     className="text-center space-y-6"
                   >
                     <div className={cn(
-                      "w-24 h-24 rounded-3xl flex items-center justify-center mx-auto mb-8 rotate-3",
+                      "w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-3",
                       tutorialCards[cardIndex].color
                     )}>
-                      {React.createElement(tutorialCards[cardIndex].icon, { size: 48 })}
+                      {React.createElement(tutorialCards[cardIndex].icon, { size: 40 })}
                     </div>
                     
-                    <div className="space-y-4">
-                      <h2 className="text-3xl font-bold text-gray-900 leading-tight">
+                    <div className="space-y-3">
+                      <h2 className="text-2xl font-bold text-gray-900 leading-tight">
                         {tutorialCards[cardIndex].title}
                       </h2>
-                      <p className="text-gray-500 text-lg leading-relaxed">
+                      <p className="text-gray-500 text-base leading-relaxed">
                         {tutorialCards[cardIndex].description}
                       </p>
                     </div>
@@ -188,3 +190,4 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     </div>
   );
 }
+);

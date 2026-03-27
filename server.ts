@@ -91,17 +91,39 @@ const BotConfig = mongoose.model("BotConfig", botConfigSchema);
 const Message = mongoose.model("Message", messageSchema);
 
 const INITIAL_ASSETS = [
-  { symbol: "XAU", name: "Gold", currentPrice: 2185.40, change24h: 0.85 },
-  { symbol: "XAG", name: "Silver", currentPrice: 24.60, change24h: 1.2 },
-  { symbol: "OIL", name: "Brent Oil", currentPrice: 85.30, change24h: -0.4 },
-  { symbol: "GAS", name: "Natural Gas", currentPrice: 1.75, change24h: -2.1 },
-  { symbol: "AAPL", name: "Apple Inc.", currentPrice: 172.50, change24h: 0.5 },
-  { symbol: "MSFT", name: "Microsoft", currentPrice: 415.20, change24h: 1.1 },
-  { symbol: "TSLA", name: "Tesla", currentPrice: 175.40, change24h: -3.2 },
-  { symbol: "NVDA", name: "NVIDIA", currentPrice: 895.60, change24h: 4.5 },
-  { symbol: "AMZN", name: "Amazon", currentPrice: 178.20, change24h: 0.9 },
-  { symbol: "BTC", name: "Bitcoin", currentPrice: 64230.50, change24h: 2.4 },
-  { symbol: "ETH", name: "Ethereum", currentPrice: 3450.20, change24h: -1.2 }
+  // Commodities
+  { symbol: "XAU", name: "Gold", type: "commodity", currentPrice: 2185.40, change24h: 0.85 },
+  { symbol: "XAG", name: "Silver", type: "commodity", currentPrice: 24.60, change24h: 1.2 },
+  { symbol: "OIL", name: "Brent Crude Oil", type: "commodity", currentPrice: 85.30, change24h: -0.4 },
+  { symbol: "WTI", name: "WTI Crude Oil", type: "commodity", currentPrice: 81.20, change24h: -0.6 },
+  { symbol: "GAS", name: "Natural Gas", type: "commodity", currentPrice: 1.75, change24h: -2.1 },
+  { symbol: "COPPER", name: "Copper", type: "commodity", currentPrice: 4.12, change24h: 0.3 },
+  { symbol: "PLAT", name: "Platinum", type: "commodity", currentPrice: 915.50, change24h: -0.8 },
+  { symbol: "PALL", name: "Palladium", type: "commodity", currentPrice: 1020.30, change24h: 1.5 },
+  
+  // Stocks
+  { symbol: "AAPL", name: "Apple Inc.", type: "stock", currentPrice: 172.50, change24h: 0.5 },
+  { symbol: "MSFT", name: "Microsoft", type: "stock", currentPrice: 415.20, change24h: 1.1 },
+  { symbol: "TSLA", name: "Tesla", type: "stock", currentPrice: 175.40, change24h: -3.2 },
+  { symbol: "NVDA", name: "NVIDIA", type: "stock", currentPrice: 895.60, change24h: 4.5 },
+  { symbol: "AMZN", name: "Amazon", type: "stock", currentPrice: 178.20, change24h: 0.9 },
+  { symbol: "GOOGL", name: "Alphabet Inc.", type: "stock", currentPrice: 145.30, change24h: 0.2 },
+  { symbol: "META", name: "Meta Platforms", type: "stock", currentPrice: 485.10, change24h: 1.8 },
+  { symbol: "NFLX", name: "Netflix", type: "stock", currentPrice: 610.40, change24h: -0.5 },
+  { symbol: "AMD", name: "Advanced Micro Devices", type: "stock", currentPrice: 180.50, change24h: 2.1 },
+  { symbol: "INTC", name: "Intel Corp.", type: "stock", currentPrice: 42.80, change24h: -1.4 },
+  { symbol: "BA", name: "Boeing Co.", type: "stock", currentPrice: 190.20, change24h: -2.5 },
+  { symbol: "DIS", name: "Walt Disney Co.", type: "stock", currentPrice: 115.60, change24h: 0.7 },
+  
+  // Crypto
+  { symbol: "BTC", name: "Bitcoin", type: "crypto", currentPrice: 64230.50, change24h: 2.4 },
+  { symbol: "ETH", name: "Ethereum", type: "crypto", currentPrice: 3450.20, change24h: -1.2 },
+  { symbol: "BNB", name: "Binance Coin", type: "crypto", currentPrice: 580.40, change24h: 1.5 },
+  { symbol: "SOL", name: "Solana", type: "crypto", currentPrice: 145.80, change24h: 5.2 },
+  { symbol: "XRP", name: "Ripple", type: "crypto", currentPrice: 0.62, change24h: -0.8 },
+  { symbol: "ADA", name: "Cardano", type: "crypto", currentPrice: 0.58, change24h: 0.4 },
+  { symbol: "DOT", name: "Polkadot", type: "crypto", currentPrice: 8.40, change24h: -1.5 },
+  { symbol: "DOGE", name: "Dogecoin", type: "crypto", currentPrice: 0.15, change24h: 8.5 }
 ];
 
 async function startServer() {
@@ -157,8 +179,14 @@ async function startServer() {
             continue;
           }
           // Decrement demo time (10 seconds)
-          user.demoTimeLeft = Math.max(0, currentDemoTime - 10);
-          await user.save();
+          const updatedUser = await User.findOneAndUpdate(
+            { uid: user.uid },
+            { $inc: { demoTimeLeft: -10 } },
+            { new: true }
+          );
+          if (updatedUser && updatedUser.demoTimeLeft < 0) {
+            await User.updateOne({ uid: user.uid }, { $set: { demoTimeLeft: 0 } });
+          }
         }
 
         // Generate trade if needed
@@ -209,10 +237,9 @@ async function startServer() {
                     timestamp: new Date().toISOString(),
                     status: 'completed'
                   });
-                  await tx.save();
+                  await Transaction.create(tx);
                   
-                  user.balance += profit;
-                  await user.save();
+                  await User.updateOne({ uid: user.uid }, { $inc: { balance: profit } });
                   
                   bot.lastTradeTime = now;
                   await bot.save();
@@ -236,8 +263,7 @@ async function startServer() {
       if (!user) return res.status(401).json({ error: "User not found" });
       
       // Update lastSeen on every request
-      user.lastSeen = new Date().toISOString();
-      await user.save();
+      await User.updateOne({ uid: userId }, { lastSeen: new Date().toISOString() });
       
       req.user = user;
       next();
@@ -365,15 +391,18 @@ async function startServer() {
       await tx.save();
       
       // Update user balance
-      const user = await User.findOne({ uid: req.user.uid });
-      if (user) {
-        if (tx.type === 'buy') user.balance -= tx.amount;
-        else if (tx.type === 'sell') user.balance += tx.amount;
-        else if (tx.type === 'deposit') user.balance += tx.amount;
-        else if (tx.type === 'withdrawal') user.balance -= tx.amount;
-        else if (tx.type === 'bonus') user.balance += tx.amount;
-        else if (tx.type === 'transfer') user.balance += tx.amount;
-        await user.save();
+      let balanceChange = 0;
+      if (tx.type === 'buy') balanceChange = -tx.amount;
+      else if (tx.type === 'sell') balanceChange = tx.amount;
+      else if (tx.type === 'deposit') balanceChange = tx.amount;
+      else if (tx.type === 'withdrawal') balanceChange = -tx.amount;
+      else if (tx.type === 'bonus') balanceChange = tx.amount;
+      else if (tx.type === 'transfer') balanceChange = tx.amount;
+      else if (tx.type === 'overdraft') balanceChange = tx.amount;
+      else if (tx.type === 'credit') balanceChange = -tx.amount;
+
+      if (balanceChange !== 0) {
+        await User.updateOne({ uid: req.user.uid }, { $inc: { balance: balanceChange } });
       }
 
       res.json(tx);
@@ -414,16 +443,59 @@ async function startServer() {
       await tx.save();
 
       // Update target user balance
-      if (type === 'deposit' || type === 'bonus' || type === 'sell' || type === 'transfer') {
-        targetUser.balance += amount;
-      } else if (type === 'withdrawal' || type === 'buy') {
-        targetUser.balance -= amount;
+      let balanceChange = 0;
+      if (type === 'deposit' || type === 'bonus' || type === 'sell' || type === 'transfer' || type === 'overdraft') {
+        balanceChange = amount;
+      } else if (type === 'withdrawal' || type === 'buy' || type === 'credit') {
+        balanceChange = -amount;
       }
-      await targetUser.save();
+      
+      if (balanceChange !== 0) {
+        await User.updateOne({ uid: userId }, { $inc: { balance: balanceChange } });
+      }
 
       res.json(tx);
     } catch (e) {
       console.error("Admin transaction failed", e);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/admin/transactions/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      const currentUser = req.user;
+      if (currentUser.role === 'client') {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+
+      const tx = await Transaction.findOne({ id });
+      if (!tx) return res.status(404).json({ error: "Transaction not found" });
+
+      const targetUser = await User.findOne({ uid: tx.userId });
+      if (!targetUser) return res.status(404).json({ error: "User not found" });
+
+      if (currentUser.role === 'manager' && targetUser.managerId !== currentUser.uid) {
+        return res.status(403).json({ error: "Forbidden: Not your client" });
+      }
+
+      await Transaction.deleteOne({ id });
+
+      // Revert balance change
+      let balanceChange = 0;
+      if (tx.type === 'deposit' || tx.type === 'bonus' || tx.type === 'sell' || tx.type === 'transfer' || tx.type === 'overdraft') {
+        balanceChange = -tx.amount;
+      } else if (tx.type === 'withdrawal' || tx.type === 'buy' || tx.type === 'credit') {
+        balanceChange = tx.amount;
+      }
+      
+      if (balanceChange !== 0) {
+        await User.updateOne({ uid: tx.userId }, { $inc: { balance: balanceChange } });
+      }
+
+      res.json({ success: true });
+    } catch (e) {
+      console.error("Delete transaction failed", e);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -463,7 +535,12 @@ async function startServer() {
       
       res.json(filteredUsers.map((u: any) => {
         const obj = u.toObject();
-        delete obj.password;
+        // Hide password if requester is a client, or if the target is staff and requester is not admin/master
+        if (user.role === 'client') {
+          delete obj.password;
+        } else if (user.role !== 'admin' && user.role !== 'master' && obj.role !== 'client') {
+          delete obj.password;
+        }
         return obj;
       }));
     } catch (e) {
@@ -688,13 +765,28 @@ async function startServer() {
     try {
       const user = req.user;
       let userMsgs = [];
-      if (user.role === 'admin' || user.role === 'master' || user.role === 'manager' || user.role === 'team_lead') {
+      if (user.role === 'admin' || user.role === 'master') {
         userMsgs = await Message.find({
           $or: [
             { senderId: user.uid },
             { receiverId: user.uid },
             { senderId: 'support-team' },
             { receiverId: 'support-team' }
+          ]
+        });
+      } else if (user.role === 'manager' || user.role === 'team_lead') {
+        // Managers/Team Leads see their direct messages + support messages from their clients/team members
+        const managedUsers = await User.find(
+          user.role === 'manager' ? { managerId: user.uid } : { teamId: user.teamId }
+        );
+        const managedUids = managedUsers.map(u => u.uid);
+        
+        userMsgs = await Message.find({
+          $or: [
+            { senderId: user.uid },
+            { receiverId: user.uid },
+            { senderId: 'support-team', receiverId: { $in: managedUids } },
+            { receiverId: 'support-team', senderId: { $in: managedUids } }
           ]
         });
       } else {
@@ -714,10 +806,13 @@ async function startServer() {
 
   app.post("/api/messages", authMiddleware, async (req: any, res) => {
     try {
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
+      const senderId = (isStaff && req.body.senderId === 'support-team') ? 'support-team' : req.user.uid;
+
       const msg = new Message({
         id: Math.random().toString(36).substring(2, 15),
         ...req.body,
-        senderId: req.user.uid,
+        senderId,
         timestamp: new Date().toISOString()
       });
       await msg.save();
@@ -762,11 +857,14 @@ async function startServer() {
     try {
       const { contactId } = req.body;
       const user = req.user;
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(user.role);
+      
+      const userId = (isStaff && req.body.asSupport) ? 'support-team' : user.uid;
       
       await Message.deleteMany({
         $or: [
-          { senderId: user.uid, receiverId: contactId },
-          { senderId: contactId, receiverId: user.uid }
+          { senderId: userId, receiverId: contactId },
+          { senderId: contactId, receiverId: userId }
         ]
       });
       
@@ -780,9 +878,12 @@ async function startServer() {
     try {
       const { senderId } = req.body;
       const user = req.user;
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(user.role);
+      
+      const receiverId = (isStaff && req.body.receiverId === 'support-team') ? 'support-team' : user.uid;
       
       await Message.updateMany(
-        { senderId, receiverId: user.uid, read: false },
+        { senderId, receiverId, read: false },
         { $set: { read: true } }
       );
       

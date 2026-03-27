@@ -7,7 +7,8 @@ import {
   ArrowDownRight,
   Zap,
   DollarSign,
-  BarChart3
+  BarChart3,
+  List
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -25,22 +26,41 @@ import { Language, translations } from '../translations';
 const generateMockData = (base: number) => {
   return Array.from({ length: 20 }, (_, i) => ({
     time: i,
-    price: base + Math.random() * 100 - 50
+    price: base + Math.random() * (base * 0.05) - (base * 0.025)
   }));
+};
+
+const generateOrderBook = (base: number) => {
+  const asks = Array.from({ length: 5 }, (_, i) => ({
+    price: base * (1 + (i + 1) * 0.001),
+    amount: Math.random() * 10 + 1
+  })).reverse();
+  
+  const bids = Array.from({ length: 5 }, (_, i) => ({
+    price: base * (1 - (i + 1) * 0.001),
+    amount: Math.random() * 10 + 1
+  }));
+  
+  return { asks, bids };
 };
 
 interface TradingProps {
   user: UserProfile;
   assets: Asset[];
-  onTrade: (asset: Asset, type: 'buy' | 'sell', amount: number) => void;
   language: Language;
 }
 
-export default function Trading({ user, assets, onTrade, language }: TradingProps) {
+export default React.memo(function Trading({ user, assets, language }: TradingProps) {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(Array.isArray(assets) && assets.length > 0 ? assets[0] : null);
   const t = translations[language];
-  const [tradeAmount, setTradeAmount] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState('');
   const [chartData, setChartData] = useState(generateMockData(selectedAsset?.currentPrice || 1000));
+  const [orderBook, setOrderBook] = useState(generateOrderBook(selectedAsset?.currentPrice || 1000));
+
+  const filteredAssets = Array.isArray(assets) ? assets.filter(a => 
+    a.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    a.name.toLowerCase().includes(searchQuery.toLowerCase())
+  ) : [];
 
   useEffect(() => {
     if (!selectedAsset && Array.isArray(assets) && assets.length > 0) {
@@ -51,6 +71,22 @@ export default function Trading({ user, assets, onTrade, language }: TradingProp
   useEffect(() => {
     if (selectedAsset) {
       setChartData(generateMockData(selectedAsset.currentPrice));
+      setOrderBook(generateOrderBook(selectedAsset.currentPrice));
+      
+      const interval = setInterval(() => {
+        setChartData(prev => {
+          const newData = [...prev.slice(1)];
+          const lastPrice = newData[newData.length - 1].price;
+          newData.push({
+            time: prev[prev.length - 1].time + 1,
+            price: lastPrice + Math.random() * (selectedAsset.currentPrice * 0.01) - (selectedAsset.currentPrice * 0.005)
+          });
+          return newData;
+        });
+        setOrderBook(generateOrderBook(selectedAsset.currentPrice));
+      }, 3000);
+      
+      return () => clearInterval(interval);
     }
   }, [selectedAsset]);
 
@@ -63,13 +99,15 @@ export default function Trading({ user, assets, onTrade, language }: TradingProp
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search assets..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={language === 'ru' ? 'Поиск активов...' : 'Search assets...'}
               className="w-full pl-10 pr-4 py-2 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-[#FF0000]/20"
             />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {Array.isArray(assets) && assets.map((asset) => (
+          {filteredAssets.map((asset) => (
             <button
               key={asset.symbol}
               onClick={() => setSelectedAsset(asset)}
@@ -170,65 +208,75 @@ export default function Trading({ user, assets, onTrade, language }: TradingProp
               </div>
             </div>
 
-            {/* Trade Controls */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-8">
+              {/* Asset Info */}
               <div className="bg-white p-4 lg:p-8 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                  <Zap size={20} className="text-yellow-500" />
-                  Quick Trade
+                  <BarChart3 size={20} className="text-blue-500" />
+                  {language === 'ru' ? 'Инфо об активе' : 'Asset Info'}
                 </h3>
-                <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4 lg:gap-6">
                   <div>
-                    <label className="text-xs lg:text-sm text-gray-500 mb-2 block">Amount (€)</label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                      <input 
-                        type="number" 
-                        value={tradeAmount}
-                        onChange={(e) => setTradeAmount(Number(e.target.value))}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-none rounded-xl text-base lg:text-lg font-semibold focus:ring-2 focus:ring-[#FF0000]/20"
-                        placeholder="0.00"
-                      />
-                    </div>
+                    <p className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-1">{language === 'ru' ? 'Капитализация' : 'Market Cap / Value'}</p>
+                    <p className="text-sm lg:text-base font-bold">1.2T €</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button 
-                      onClick={() => onTrade(selectedAsset, 'buy', tradeAmount)}
-                      className="py-3 lg:py-4 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-colors shadow-lg shadow-green-600/20 text-sm lg:text-base"
-                    >
-                      BUY
-                    </button>
-                    <button 
-                      onClick={() => onTrade(selectedAsset, 'sell', tradeAmount)}
-                      className="py-3 lg:py-4 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-600/20 text-sm lg:text-base"
-                    >
-                      SELL
-                    </button>
+                  <div>
+                    <p className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-1">{language === 'ru' ? 'Объем (24ч)' : 'Volume (24h)'}</p>
+                    <p className="text-sm lg:text-base font-bold">45.8B €</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-1">{language === 'ru' ? 'Макс. за 52 нед.' : '52W High'}</p>
+                    <p className="text-sm lg:text-base font-bold">{(selectedAsset.currentPrice * 1.2).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-1">{language === 'ru' ? 'Тип актива' : 'Asset Type'}</p>
+                    <p className="text-sm lg:text-base font-bold capitalize">{selectedAsset.type || 'Asset'}</p>
                   </div>
                 </div>
               </div>
 
+              {/* Order Book */}
               <div className="bg-white p-4 lg:p-8 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-semibold mb-6 flex items-center gap-2">
-                  <BarChart3 size={20} className="text-blue-500" />
-                  Asset Info
+                  <List size={20} className="text-purple-500" />
+                  {language === 'ru' ? 'Стакан заявок' : 'Order Book'}
                 </h3>
-                <div className="grid grid-cols-2 gap-4 lg:gap-6">
+                <div className="grid grid-cols-2 gap-8">
                   <div>
-                    <p className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-1">Market Cap / Value</p>
-                    <p className="text-sm lg:text-base font-bold">1.2T €</p>
+                    <div className="flex justify-between text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-2 pb-2 border-b border-gray-100">
+                      <span>{language === 'ru' ? 'Цена' : 'Price'} (€)</span>
+                      <span>{language === 'ru' ? 'Объем' : 'Amount'}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {orderBook.asks.map((ask, i) => (
+                        <div key={`ask-${i}`} className="flex justify-between text-xs lg:text-sm relative overflow-hidden rounded py-1 px-2">
+                          <div 
+                            className="absolute right-0 top-0 bottom-0 bg-red-50 z-0" 
+                            style={{ width: `${(ask.amount / 11) * 100}%` }}
+                          />
+                          <span className="text-red-600 font-medium z-10">{ask.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="z-10">{ask.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   <div>
-                    <p className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-1">Volume (24h)</p>
-                    <p className="text-sm lg:text-base font-bold">45.8B €</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-1">52W High</p>
-                    <p className="text-sm lg:text-base font-bold">{(selectedAsset.currentPrice * 1.2).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-1">Asset Type</p>
-                    <p className="text-sm lg:text-base font-bold capitalize">{selectedAsset.type || 'Asset'}</p>
+                    <div className="flex justify-between text-[10px] lg:text-xs text-gray-500 uppercase tracking-wider mb-2 pb-2 border-b border-gray-100">
+                      <span>{language === 'ru' ? 'Цена' : 'Price'} (€)</span>
+                      <span>{language === 'ru' ? 'Объем' : 'Amount'}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {orderBook.bids.map((bid, i) => (
+                        <div key={`bid-${i}`} className="flex justify-between text-xs lg:text-sm relative overflow-hidden rounded py-1 px-2">
+                          <div 
+                            className="absolute right-0 top-0 bottom-0 bg-green-50 z-0" 
+                            style={{ width: `${(bid.amount / 11) * 100}%` }}
+                          />
+                          <span className="text-green-600 font-medium z-10">{bid.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="z-10">{bid.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -239,3 +287,4 @@ export default function Trading({ user, assets, onTrade, language }: TradingProp
     </div>
   );
 }
+);

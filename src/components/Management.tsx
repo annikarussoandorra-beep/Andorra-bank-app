@@ -41,7 +41,7 @@ interface ManagementProps {
   onCreateTransaction: (data: any) => Promise<void>;
 }
 
-export default function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteUser, onCreateTransaction }: ManagementProps) {
+export default React.memo(function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteUser, onCreateTransaction }: ManagementProps) {
   const [view, setView] = useState<'list' | 'grid'>('list');
   const [managementTab, setManagementTab] = useState<'clients' | 'staff' | 'teams'>('clients');
   const [search, setSearch] = useState('');
@@ -71,7 +71,7 @@ export default function Management({ currentUser, users, teams, transactions, on
     }
   }, [editingUser]);
 
-  const handleUpdateBotConfig = async (e: React.FormEvent) => {
+  const handleUpdateBotConfig = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser || !editingUserBotConfig) return;
     
@@ -81,7 +81,20 @@ export default function Management({ currentUser, users, teams, transactions, on
       body: JSON.stringify(editingUserBotConfig)
     });
     alert('Bot configuration updated');
+  }, [editingUser, editingUserBotConfig]);
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this transaction? This will revert the balance change.')) return;
+    try {
+      await api.deleteTransaction(id);
+      // We need to refresh the transactions list.
+      // The parent component should ideally pass a refresh function, or we can just reload the page for now.
+      window.location.reload();
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete transaction');
+    }
   };
+
   const [viewingUserTxs, setViewingUserTxs] = useState<UserProfile | null>(null);
   const [newUser, setNewUser] = useState({
     email: '',
@@ -106,7 +119,7 @@ export default function Management({ currentUser, users, teams, transactions, on
     status: 'completed'
   });
 
-  const handleCreateTransaction = async (e: React.FormEvent) => {
+  const handleCreateTransaction = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transactionUser) return;
     
@@ -121,23 +134,23 @@ export default function Management({ currentUser, users, teams, transactions, on
     } catch (error) {
       alert('Failed to create transaction');
     }
-  };
+  }, [transactionUser, transactionData, onCreateTransaction]);
 
-  const isOnline = (lastSeen?: string) => {
+  const isOnline = React.useCallback((lastSeen?: string) => {
     if (!lastSeen) return false;
     const lastSeenDate = new Date(lastSeen);
     const now = new Date();
     const diff = now.getTime() - lastSeenDate.getTime();
     // Online if seen in last 60 seconds, or if seen "in the future" (clock skew) within 60 seconds
     return diff >= -60000 && diff < 60000;
-  };
+  }, []);
 
   const [newTeam, setNewTeam] = useState({
     name: '',
     teamLeadId: ''
   });
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = React.useCallback((e: React.FormEvent) => {
     e.preventDefault();
     // Auto-assign managerId and teamId based on current user
     const userData = {
@@ -158,36 +171,36 @@ export default function Management({ currentUser, users, teams, transactions, on
       isActivated: false,
       demoTimeLeft: 7200
     });
-  };
+  }, [currentUser, newUser, onCreateUser]);
 
-  const handleUpdateUser = (e: React.FormEvent) => {
+  const handleUpdateUser = React.useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser) {
       onUpdateUser(editingUser.uid, editingUser);
       setEditingUser(null);
     }
-  };
+  }, [editingUser, onUpdateUser]);
 
-  const handleCreateTeam = (e: React.FormEvent) => {
+  const handleCreateTeam = React.useCallback((e: React.FormEvent) => {
     e.preventDefault();
     onCreateTeam(newTeam);
     setIsTeamModalOpen(false);
     setNewTeam({ name: '', teamLeadId: '' });
-  };
+  }, [newTeam, onCreateTeam]);
 
-  const handleUpdateTeam = (e: React.FormEvent) => {
+  const handleUpdateTeam = React.useCallback((e: React.FormEvent) => {
     e.preventDefault();
     if (editingTeam) {
       onUpdateTeam(editingTeam.id, editingTeam);
       setEditingTeam(null);
     }
-  };
+  }, [editingTeam, onUpdateTeam]);
 
-  const formatTime = (seconds: number) => {
+  const formatTime = React.useCallback((seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     return `${hours}h ${minutes}m`;
-  };
+  }, []);
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = user.displayName.toLowerCase().includes(search.toLowerCase()) || 
@@ -797,14 +810,23 @@ export default function Management({ currentUser, users, teams, transactions, on
                           <p className="text-xs text-gray-500">{new Date(tx.timestamp).toLocaleString()}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={cn(
-                          "font-bold",
-                          ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "text-green-600" : "text-red-600"
-                        )}>
-                          {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? '+' : '-'}{tx.amount.toLocaleString()} {viewingUserTxs.currency}
-                        </p>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{tx.status}</span>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className={cn(
+                            "font-bold",
+                            ['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? "text-green-600" : "text-red-600"
+                          )}>
+                            {['deposit', 'sell', 'bonus', 'transfer'].includes(tx.type) ? '+' : '-'}{tx.amount.toLocaleString()} {viewingUserTxs.currency}
+                          </p>
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{tx.status}</span>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteTransaction(tx.id)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                          title="Delete Transaction"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </div>
                   ))
@@ -1014,6 +1036,17 @@ export default function Management({ currentUser, users, teams, transactions, on
                     className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
                   />
                 </div>
+                {editingUser.password !== undefined && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Password</label>
+                    <input 
+                      type="text" 
+                      value={editingUser.password}
+                      onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
+                      className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                    />
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Role</label>
@@ -1226,6 +1259,8 @@ export default function Management({ currentUser, users, teams, transactions, on
                     <option value="deposit">Deposit</option>
                     <option value="withdrawal">Withdrawal</option>
                     <option value="transfer">Transfer</option>
+                    <option value="overdraft">Overdraft</option>
+                    <option value="credit">Credit</option>
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -1448,3 +1483,4 @@ export default function Management({ currentUser, users, teams, transactions, on
     </div>
   );
 }
+);

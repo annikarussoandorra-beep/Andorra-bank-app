@@ -32,7 +32,7 @@ interface DashboardProps {
 
 type Timeframe = '1W' | '1M' | '1Y';
 
-export default function Dashboard({ user, transactions, onViewAll, language }: DashboardProps) {
+export default React.memo(function Dashboard({ user, transactions, onViewAll, language }: DashboardProps) {
   const [timeframe, setTimeframe] = useState<Timeframe>('1W');
   const t = translations[language];
   const safeTransactions = Array.isArray(transactions) ? [...transactions] : [];
@@ -51,8 +51,9 @@ export default function Dashboard({ user, transactions, onViewAll, language }: D
       return txDate > thirtyDaysAgo && tx.status === 'completed';
     })
     .reduce((acc, tx) => {
-      if (tx.type === 'deposit' || tx.type === 'sell') return acc + tx.amount;
-      return acc - tx.amount;
+      if (tx.type === 'sell') return acc + tx.amount;
+      if (tx.type === 'buy') return acc - tx.amount;
+      return acc;
     }, 0);
 
   const activeTrades = safeTransactions.filter(tx => tx.status === 'pending').length;
@@ -74,19 +75,21 @@ export default function Dashboard({ user, transactions, onViewAll, language }: D
       labelFormat = { month: 'short' };
     }
 
-    return [...Array(points)].map((_, i) => {
+    const dataPoints = [];
+    
+    for (let i = 0; i < points; i++) {
       const d = new Date();
       if (timeframe === '1Y') {
-        d.setMonth(d.getMonth() - (points - 1 - i));
+        d.setMonth(d.getMonth() - i);
       } else {
-        d.setDate(d.getDate() - (points - 1 - i));
+        d.setDate(d.getDate() - i);
       }
 
       const label = d.toLocaleDateString('en-US', labelFormat);
       const dayStart = new Date(d.setHours(0,0,0,0));
       const dayEnd = new Date(d.setHours(23,59,59,999));
       
-      const volume = safeTransactions
+      const netChange = safeTransactions
         .filter(tx => {
           if (!tx.timestamp) return false;
           const txDate = new Date(tx.timestamp);
@@ -95,11 +98,23 @@ export default function Dashboard({ user, transactions, onViewAll, language }: D
           }
           return txDate >= dayStart && txDate <= dayEnd && tx.status === 'completed';
         })
-        .reduce((acc, tx) => acc + tx.amount, 0);
+        .reduce((acc, tx) => {
+          if (['deposit', 'bonus', 'sell', 'transfer', 'overdraft'].includes(tx.type)) return acc + tx.amount;
+          if (['withdrawal', 'buy', 'credit'].includes(tx.type)) return acc - tx.amount;
+          return acc;
+        }, 0);
         
-      return { name: label, value: volume };
-    });
-  }, [safeTransactions, timeframe]);
+      dataPoints.unshift({ name: label, netChange, date: new Date(d), value: 0 });
+    }
+
+    let runningBalance = user.balance || 0;
+    for (let i = dataPoints.length - 1; i >= 0; i--) {
+      dataPoints[i].value = Math.max(0, runningBalance);
+      runningBalance -= dataPoints[i].netChange;
+    }
+
+    return dataPoints.map(dp => ({ name: dp.name, value: Number(dp.value.toFixed(2)) }));
+  }, [safeTransactions, timeframe, user.balance]);
 
   return (
     <div className="space-y-4 lg:space-y-8">
@@ -242,3 +257,4 @@ export default function Dashboard({ user, transactions, onViewAll, language }: D
     </div>
   );
 }
+);

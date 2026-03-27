@@ -4,7 +4,9 @@ import { UserProfile, Transaction, Asset, Team, ChatMessage, BotConfig } from '.
 import { cn } from './lib/utils';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
+import AdminDashboard from './components/AdminDashboard';
 import Trading from './components/Trading';
+import Offers from './components/Offers';
 import Wallet from './components/Wallet';
 import BotControl from './components/BotControl';
 import Chat from './components/Chat';
@@ -15,17 +17,39 @@ import { Shield, ArrowRight, TrendingUp, Lock, Mail, Key } from 'lucide-react';
 import { motion } from 'motion/react';
 
 const INITIAL_ASSETS: Asset[] = [
+  // Commodities
   { symbol: 'XAU', name: 'Gold', type: 'commodity', currentPrice: 2185.40, change24h: 0.85 },
   { symbol: 'XAG', name: 'Silver', type: 'commodity', currentPrice: 24.60, change24h: 1.2 },
-  { symbol: 'OIL', name: 'Brent Oil', type: 'commodity', currentPrice: 85.30, change24h: -0.4 },
+  { symbol: 'OIL', name: 'Brent Crude Oil', type: 'commodity', currentPrice: 85.30, change24h: -0.4 },
+  { symbol: 'WTI', name: 'WTI Crude Oil', type: 'commodity', currentPrice: 81.20, change24h: -0.6 },
   { symbol: 'GAS', name: 'Natural Gas', type: 'commodity', currentPrice: 1.75, change24h: -2.1 },
+  { symbol: 'COPPER', name: 'Copper', type: 'commodity', currentPrice: 4.12, change24h: 0.3 },
+  { symbol: 'PLAT', name: 'Platinum', type: 'commodity', currentPrice: 915.50, change24h: -0.8 },
+  { symbol: 'PALL', name: 'Palladium', type: 'commodity', currentPrice: 1020.30, change24h: 1.5 },
+  
+  // Stocks
   { symbol: 'AAPL', name: 'Apple Inc.', type: 'stock', currentPrice: 172.50, change24h: 0.5 },
   { symbol: 'MSFT', name: 'Microsoft', type: 'stock', currentPrice: 415.20, change24h: 1.1 },
   { symbol: 'TSLA', name: 'Tesla', type: 'stock', currentPrice: 175.40, change24h: -3.2 },
   { symbol: 'NVDA', name: 'NVIDIA', type: 'stock', currentPrice: 895.60, change24h: 4.5 },
   { symbol: 'AMZN', name: 'Amazon', type: 'stock', currentPrice: 178.20, change24h: 0.9 },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', type: 'stock', currentPrice: 145.30, change24h: 0.2 },
+  { symbol: 'META', name: 'Meta Platforms', type: 'stock', currentPrice: 485.10, change24h: 1.8 },
+  { symbol: 'NFLX', name: 'Netflix', type: 'stock', currentPrice: 610.40, change24h: -0.5 },
+  { symbol: 'AMD', name: 'Advanced Micro Devices', type: 'stock', currentPrice: 180.50, change24h: 2.1 },
+  { symbol: 'INTC', name: 'Intel Corp.', type: 'stock', currentPrice: 42.80, change24h: -1.4 },
+  { symbol: 'BA', name: 'Boeing Co.', type: 'stock', currentPrice: 190.20, change24h: -2.5 },
+  { symbol: 'DIS', name: 'Walt Disney Co.', type: 'stock', currentPrice: 115.60, change24h: 0.7 },
+  
+  // Crypto
   { symbol: 'BTC', name: 'Bitcoin', type: 'crypto', currentPrice: 64230.50, change24h: 2.4 },
   { symbol: 'ETH', name: 'Ethereum', type: 'crypto', currentPrice: 3450.20, change24h: -1.2 },
+  { symbol: 'BNB', name: 'Binance Coin', type: 'crypto', currentPrice: 580.40, change24h: 1.5 },
+  { symbol: 'SOL', name: 'Solana', type: 'crypto', currentPrice: 145.80, change24h: 5.2 },
+  { symbol: 'XRP', name: 'Ripple', type: 'crypto', currentPrice: 0.62, change24h: -0.8 },
+  { symbol: 'ADA', name: 'Cardano', type: 'crypto', currentPrice: 0.58, change24h: 0.4 },
+  { symbol: 'DOT', name: 'Polkadot', type: 'crypto', currentPrice: 8.40, change24h: -1.5 },
+  { symbol: 'DOGE', name: 'Dogecoin', type: 'crypto', currentPrice: 0.15, change24h: 8.5 },
 ];
 
 export default function App() {
@@ -62,6 +86,7 @@ export default function App() {
     return (localStorage.getItem('app_language') as Language) || 'en';
   });
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
     if (user && user.role === 'client' && !localStorage.getItem(`onboarding_completed_${user.uid}`)) {
@@ -69,24 +94,67 @@ export default function App() {
     }
     
     // Handle suspended status or redirect for activated users
-    if (user && user.role === 'client') {
+    if (user && user.role === 'client' && !isRedirecting) {
       if (user.status === 'suspended') {
         handleLogout();
         setLoginError('Your account has been suspended. Please contact support.');
       } else if (user.isActivated && user.redirectUrl) {
-        window.location.href = user.redirectUrl;
+        const targetUrl = user.redirectUrl;
+        const currentPath = window.location.pathname;
+        
+        // Only redirect if the target is different from current path
+        // and handle both absolute and relative URLs
+        let shouldRedirect = true;
+        try {
+          const targetUrlObj = new URL(targetUrl, window.location.origin);
+          
+          if (targetUrlObj.origin === window.location.origin) {
+            const targetPath = targetUrlObj.pathname.replace(/\/$/, '') || '/';
+            const currentPathNormalized = currentPath.replace(/\/$/, '') || '/';
+            
+            if (targetPath === currentPathNormalized) {
+              shouldRedirect = false;
+            }
+          }
+        } catch (e) {
+          const targetPath = targetUrl.replace(/\/$/, '') || '/';
+          const currentPathNormalized = currentPath.replace(/\/$/, '') || '/';
+          if (targetPath === currentPathNormalized) {
+            shouldRedirect = false;
+          }
+        }
+
+        if (shouldRedirect) {
+          console.log(`Redirecting from ${window.location.pathname} to ${targetUrl}`);
+          setIsRedirecting(true);
+          
+          // Clear the redirectUrl in the database before redirecting to prevent loops
+          api.updateUser(user.uid, { redirectUrl: null }).then(() => {
+            // Also update local state to be safe
+            setUser(prev => prev ? { ...prev, redirectUrl: null } : null);
+            window.location.href = targetUrl;
+          }).catch(() => {
+            // Fallback if update fails
+            setUser(prev => prev ? { ...prev, redirectUrl: null } : null);
+            window.location.href = targetUrl;
+          });
+        } else {
+          // If we are already at the target, just clear it
+          api.updateUser(user.uid, { redirectUrl: null });
+          setUser(prev => prev ? { ...prev, redirectUrl: null } : null);
+        }
       }
     }
-  }, [user]);
+  }, [user, isRedirecting]);
 
-  const handleOnboardingComplete = (lang: Language) => {
+  const handleOnboardingComplete = React.useCallback((lang: Language) => {
     setLanguage(lang);
     localStorage.setItem('app_language', lang);
     if (user) {
       localStorage.setItem(`onboarding_completed_${user.uid}`, 'true');
     }
     setShowOnboarding(false);
-  };
+  }, [user]);
 
   useEffect(() => {
     if (user?.demoTimeLeft !== undefined) {
@@ -141,15 +209,18 @@ export default function App() {
               api.getUser(currentUser.uid)
             ]);
             
-            if (Array.isArray(txs)) setTransactions(txs);
+            if (Array.isArray(txs)) setTransactions(prev => JSON.stringify(prev) === JSON.stringify(txs) ? prev : txs);
             if (bot && typeof bot === 'object') {
-              setBotConfig(prev => ({ ...prev, ...bot }));
+              setBotConfig(prev => {
+                const next = { ...prev, ...bot };
+                return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+              });
             }
-            if (Array.isArray(msgs)) setMessages(msgs);
-            if (Array.isArray(users)) setAllUsers(users);
-            if (Array.isArray(teamsData)) setTeams(teamsData);
-            if (Array.isArray(assetsData)) setAssets(assetsData);
-            if (me) setUser(me);
+            if (Array.isArray(msgs)) setMessages(prev => JSON.stringify(prev) === JSON.stringify(msgs) ? prev : msgs);
+            if (Array.isArray(users)) setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(users) ? prev : users);
+            if (Array.isArray(teamsData)) setTeams(prev => JSON.stringify(prev) === JSON.stringify(teamsData) ? prev : teamsData);
+            if (Array.isArray(assetsData)) setAssets(prev => JSON.stringify(prev) === JSON.stringify(assetsData) ? prev : assetsData);
+            if (me) setUser(prev => JSON.stringify(prev) === JSON.stringify(me) ? prev : me);
           } catch (e) {
             console.error("Data fetch failed", e);
           }
@@ -177,7 +248,7 @@ export default function App() {
     };
   }, []);
 
-  const handleBootstrap = async (e: React.FormEvent) => {
+  const handleBootstrap = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     try {
@@ -197,9 +268,9 @@ export default function App() {
     } catch (e) {
       setLoginError('Bootstrap failed');
     }
-  };
+  }, [email, password, displayName]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     console.log("App: handleLogin triggered", email);
     setLoginError('');
@@ -210,11 +281,11 @@ export default function App() {
       console.error("App: handleLogin failed", error);
       setLoginError('Invalid email or password');
     }
-  };
+  }, [email, password]);
 
-  const handleLogout = () => api.logout();
+  const handleLogout = React.useCallback(() => api.logout(), []);
 
-  const handleTrade = async (asset: Asset, type: 'buy' | 'sell', amount: number) => {
+  const handleTrade = React.useCallback(async (asset: Asset, type: 'buy' | 'sell', amount: number) => {
     if (!user || amount <= 0) return;
     if (type === 'buy' && user.balance < amount) {
       alert('Insufficient balance');
@@ -239,9 +310,9 @@ export default function App() {
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'transactions');
     }
-  };
+  }, [user]);
 
-  const handleDeposit = async (amount: number) => {
+  const handleDeposit = React.useCallback(async (amount: number) => {
     if (!user || amount <= 0) return;
     try {
       await api.createTransaction({
@@ -256,9 +327,9 @@ export default function App() {
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'transactions');
     }
-  };
+  }, [user]);
 
-  const handleWithdraw = async (amount: number) => {
+  const handleWithdraw = React.useCallback(async (amount: number) => {
     if (!user || amount <= 0 || user.balance < amount) return;
     try {
       await api.createTransaction({
@@ -273,9 +344,9 @@ export default function App() {
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'transactions');
     }
-  };
+  }, [user]);
 
-  const updateBotConfig = async (newConfig: Partial<BotConfig>) => {
+  const updateBotConfig = React.useCallback(async (newConfig: Partial<BotConfig>) => {
     if (!user) return;
     try {
       // If activating, and we don't have a start time, set it
@@ -295,9 +366,9 @@ export default function App() {
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'bots');
     }
-  };
+  }, [user, botConfig.botStartTime]);
 
-  const createUser = async (data: any) => {
+  const createUser = React.useCallback(async (data: any) => {
     try {
       const response = await fetch('/api/admin/create-user', {
         method: 'POST',
@@ -313,11 +384,9 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
-  const deleteUser = async (uid: string) => {
-    // In iFrame environments, window.confirm might be blocked.
-    // Proceeding directly for now, but in a real app, use a custom modal.
+  const deleteUser = React.useCallback(async (uid: string) => {
     try {
       const response = await fetch(`/api/admin/users/${uid}`, {
         method: 'DELETE'
@@ -332,9 +401,9 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
-  const createTeam = async (data: any) => {
+  const createTeam = React.useCallback(async (data: any) => {
     try {
       const response = await fetch('/api/admin/create-team', {
         method: 'POST',
@@ -350,9 +419,9 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
-  const handleSendMessage = async (receiverId: string, data: Partial<ChatMessage>) => {
+  const handleSendMessage = React.useCallback(async (receiverId: string, data: Partial<ChatMessage>) => {
     if (!user) return;
     try {
       await api.sendMessage({
@@ -366,9 +435,9 @@ export default function App() {
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'messages');
     }
-  };
+  }, [user]);
 
-  const handleDeleteMessage = async (id: string) => {
+  const handleDeleteMessage = React.useCallback(async (id: string) => {
     try {
       await fetch(`/api/messages/${id}`, { method: 'DELETE' });
       const msgs = await api.getMessages();
@@ -376,9 +445,9 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
-  const handleEditMessage = async (id: string, text: string) => {
+  const handleEditMessage = React.useCallback(async (id: string, text: string) => {
     try {
       await fetch(`/api/messages/${id}`, {
         method: 'PATCH',
@@ -390,38 +459,43 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
-  const handleClearChat = async (contactId: string) => {
+  const handleClearChat = React.useCallback(async (contactId: string, asSupport?: boolean) => {
     try {
       await fetch('/api/messages/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactId })
+        body: JSON.stringify({ contactId, asSupport })
       });
       const msgs = await api.getMessages();
       setMessages(msgs);
     } catch (e) {
       console.error(e);
     }
-  };
+  }, []);
 
-  const handleMarkAsRead = async (senderId: string) => {
+  const handleMarkAsRead = React.useCallback(async (senderId: string, receiverId?: string) => {
     if (!user) return;
     try {
-      await api.markMessagesAsRead(senderId);
+      const targetReceiverId = receiverId || user.uid;
+      await fetch('/api/messages/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderId, receiverId: targetReceiverId })
+      });
       // Update local state immediately for better UX
       setMessages(prev => prev.map(m => 
-        (m.senderId === senderId && m.receiverId === user.uid) 
+        (m.senderId === senderId && m.receiverId === targetReceiverId) 
           ? { ...m, read: true } 
           : m
       ));
     } catch (e) {
       console.error(e);
     }
-  };
+  }, [user]);
 
-  const handleBotTrade = async (trade: Partial<Transaction>) => {
+  const handleBotTrade = React.useCallback(async (trade: Partial<Transaction>) => {
     if (!user) return;
     try {
       await api.addTransaction({
@@ -443,7 +517,131 @@ export default function App() {
     } catch (e) {
       console.error("Trade failed", e);
     }
-  };
+  }, [user]);
+
+  const handleUpdateUser = React.useCallback(async (uid: string, data: Partial<UserProfile>) => {
+    try {
+      await fetch(`/api/admin/update-user/${uid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const users = await api.getUsers();
+      setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(users) ? prev : users);
+    } catch (e) {
+      console.error("Failed to update user", e);
+    }
+  }, []);
+
+  const handleCreateUser = React.useCallback(async (data: any) => {
+    try {
+      await createUser(data);
+      const users = await api.getUsers();
+      setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(users) ? prev : users);
+    } catch (e) {
+      console.error("Failed to create user", e);
+    }
+  }, [createUser]);
+
+  const handleCreateTeamAction = React.useCallback(async (data: any) => {
+    try {
+      await createTeam(data);
+      const teamsData = await api.getTeams();
+      setTeams(prev => JSON.stringify(prev) === JSON.stringify(teamsData) ? prev : teamsData);
+    } catch (e) {
+      console.error("Failed to create team", e);
+    }
+  }, [createTeam]);
+
+  const handleUpdateTeamAction = React.useCallback(async (id: string, data: Partial<Team>) => {
+    try {
+      await fetch(`/api/admin/update-team/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const teamsData = await api.getTeams();
+      setTeams(prev => JSON.stringify(prev) === JSON.stringify(teamsData) ? prev : teamsData);
+    } catch (e) {
+      console.error("Failed to update team", e);
+    }
+  }, []);
+
+  const handleAdminCreateTransaction = React.useCallback(async (data: any) => {
+    try {
+      await api.adminCreateTransaction(data);
+      const [users, txs] = await Promise.all([
+        api.getUsers(),
+        api.getTransactions()
+      ]);
+      setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(users) ? prev : users);
+      setTransactions(prev => JSON.stringify(prev) === JSON.stringify(txs) ? prev : txs);
+    } catch (e) {
+      console.error("Failed to create admin transaction", e);
+    }
+  }, []);
+
+  const handleUpdateDisplayName = React.useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user) return;
+    const newName = e.target.value;
+    setUser(prev => prev ? { ...prev, displayName: newName } : null);
+    try {
+      await fetch(`/api/admin/update-user/${user.uid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ displayName: newName })
+      });
+    } catch (e) {
+      console.error("Failed to update display name", e);
+    }
+  }, [user]);
+
+  const handleSetNewPassword = React.useCallback(() => {
+    if (!user) return;
+    const newPass = prompt('Enter new password:');
+    if (newPass) {
+      fetch(`/api/admin/update-user/${user.uid}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPass })
+      }).then(() => alert('Password updated successfully'))
+        .catch(e => console.error("Failed to update password", e));
+    }
+  }, [user]);
+
+  const handleSetLanguage = React.useCallback((langCode: Language) => {
+    setLanguage(langCode);
+    localStorage.setItem('app_language', langCode);
+  }, []);
+
+  const handleViewAllWallet = React.useCallback(() => setActiveTab('wallet'), []);
+
+  const unreadMessagesCount = React.useMemo(() => 
+    messages.filter(m => m.receiverId === user?.uid && !m.read).length,
+    [messages, user?.uid]
+  );
+
+  const chatContacts = React.useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'client') {
+      return [
+        ...allUsers.filter(u => u.uid === user.managerId),
+        {
+          uid: 'support-team',
+          displayName: 'Support Service',
+          email: 'support@andorra-invest.com',
+          role: 'admin',
+          balance: 0,
+          currency: 'EUR',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          managerId: null,
+          teamId: null
+        } as UserProfile
+      ];
+    }
+    return allUsers.filter(u => u.uid !== user.uid);
+  }, [allUsers, user]);
 
   if (loading) {
     return (
@@ -472,7 +670,7 @@ export default function App() {
               <span className="text-white/60 italic">future</span> today.
             </h1>
             <p className="text-lg lg:text-xl text-white/80 max-w-md leading-relaxed">
-              Professional banking and trading simulation platform for the modern investor.
+              Professional banking and trading platform for the modern investor.
             </p>
           </div>
           <div className="relative z-10 flex items-center gap-6 lg:gap-8 text-[10px] lg:text-sm font-medium opacity-60 mt-8 lg:mt-0">
@@ -578,8 +776,6 @@ export default function App() {
     );
   }
 
-  const unreadMessagesCount = messages.filter(m => m.receiverId === user?.uid && !m.read).length;
-
   return (
     <>
       {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
@@ -592,12 +788,22 @@ export default function App() {
         language={language}
       >
       {activeTab === 'dashboard' && (
-        <Dashboard 
-          user={user} 
-          transactions={transactions} 
-          onViewAll={() => setActiveTab('wallet')} 
-          language={language}
-        />
+        user.role === 'client' ? (
+          <Dashboard 
+            user={user} 
+            transactions={transactions} 
+            onViewAll={handleViewAllWallet} 
+            language={language}
+          />
+        ) : (
+          <AdminDashboard
+            user={user}
+            allUsers={allUsers}
+            teams={teams}
+            messages={messages}
+            language={language}
+          />
+        )
       )}
       {activeTab === 'wallet' && <Wallet user={user} transactions={transactions} onDeposit={handleDeposit} onWithdraw={handleWithdraw} language={language} />}
       {activeTab === 'bot' && (
@@ -612,7 +818,8 @@ export default function App() {
           language={language}
         />
       )}
-      {activeTab === 'trading' && <Trading user={user} assets={assets} onTrade={handleTrade} language={language} />}
+      {activeTab === 'trading' && <Trading user={user} assets={assets} language={language} />}
+      {activeTab === 'offers' && <Offers user={user} language={language} />}
       {activeTab === 'chat' && (
         <Chat 
           currentUser={user} 
@@ -624,24 +831,7 @@ export default function App() {
           onMarkAsRead={handleMarkAsRead}
           allUsers={allUsers}
           language={language}
-          contacts={user.role === 'client' 
-            ? [
-                ...allUsers.filter(u => u.uid === user.managerId),
-                {
-                  uid: 'support-team',
-                  displayName: 'Support Service',
-                  email: 'support@andorra-invest.com',
-                  role: 'admin',
-                  balance: 0,
-                  currency: 'EUR',
-                  status: 'active',
-                  createdAt: new Date().toISOString(),
-                  managerId: null,
-                  teamId: null
-                } as UserProfile
-              ]
-            : allUsers.filter(u => u.uid !== user.uid)
-          }
+          contacts={chatContacts}
         />
       )}
       {(activeTab === 'admin' || activeTab === 'master') && (
@@ -650,44 +840,12 @@ export default function App() {
               users={allUsers} 
               teams={teams}
               transactions={transactions}
-              onUpdateUser={async (uid, data) => {
-                await fetch(`/api/admin/update-user/${uid}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(data)
-                });
-                const users = await api.getUsers();
-                setAllUsers(users);
-              }}
-              onCreateUser={async (data) => {
-                await createUser(data);
-                const users = await api.getUsers();
-                setAllUsers(users);
-              }}
-              onCreateTeam={async (data) => {
-                await createTeam(data);
-                const teamsData = await api.getTeams();
-                setTeams(teamsData);
-              }}
-              onUpdateTeam={async (id, data) => {
-                await fetch(`/api/admin/update-team/${id}`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify(data)
-                });
-                const teamsData = await api.getTeams();
-                setTeams(teamsData);
-              }}
+              onUpdateUser={handleUpdateUser}
+              onCreateUser={handleCreateUser}
+              onCreateTeam={handleCreateTeamAction}
+              onUpdateTeam={handleUpdateTeamAction}
               onDeleteUser={deleteUser}
-              onCreateTransaction={async (data) => {
-                await api.adminCreateTransaction(data);
-                const [users, txs] = await Promise.all([
-                  api.getUsers(),
-                  api.getTransactions()
-                ]);
-                setAllUsers(users);
-                setTransactions(txs);
-              }}
+              onCreateTransaction={handleAdminCreateTransaction}
             />
           )}
       {activeTab === 'settings' && (
@@ -705,13 +863,12 @@ export default function App() {
                   { code: 'it', label: 'Italiano' },
                   { code: 'pt', label: 'Português' },
                   { code: 'ru', label: 'Русский' },
+                  { code: 'bg', label: 'Български' },
+                  { code: 'pl', label: 'Polski' },
                 ].map((lang) => (
                   <button
                     key={lang.code}
-                    onClick={() => {
-                      setLanguage(lang.code as Language);
-                      localStorage.setItem('app_language', lang.code);
-                    }}
+                    onClick={() => handleSetLanguage(lang.code as Language)}
                     className={cn(
                       "px-4 py-3 rounded-xl font-bold text-sm transition-all border-2",
                       language === lang.code 
@@ -733,15 +890,7 @@ export default function App() {
                   <input 
                     type="text" 
                     value={user.displayName}
-                    onChange={async (e) => {
-                      const newName = e.target.value;
-                      setUser({...user, displayName: newName});
-                      await fetch(`/api/admin/update-user/${user.uid}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ displayName: newName })
-                      });
-                    }}
+                    onChange={handleUpdateDisplayName}
                     className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl font-medium focus:ring-2 focus:ring-[#FF0000]/20"
                   />
                 </div>
@@ -776,16 +925,7 @@ export default function App() {
             <div className="pt-6 border-t border-gray-100">
               <label className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2 block">Change Password</label>
               <button 
-                onClick={() => {
-                  const newPass = prompt('Enter new password:');
-                  if (newPass) {
-                    fetch(`/api/admin/update-user/${user.uid}`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ password: newPass })
-                    }).then(() => alert('Password updated successfully'));
-                  }
-                }}
+                onClick={handleSetNewPassword}
                 className="px-6 py-3 bg-gray-900 text-white rounded-xl font-bold hover:bg-black transition-all"
               >
                 Set New Password

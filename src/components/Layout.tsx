@@ -11,7 +11,8 @@ import {
   LogOut,
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  Gift
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -29,7 +30,7 @@ interface LayoutProps {
   language: Language;
 }
 
-export default function Layout({ 
+export default React.memo(function Layout({ 
   children, 
   activeTab, 
   setActiveTab, 
@@ -50,6 +51,8 @@ export default function Layout({
   const menuItems = [
     { id: 'dashboard', label: t.dashboard, icon: LayoutDashboard, roles: ['client', 'manager', 'team_lead', 'admin'] },
     { id: 'wallet', label: t.wallet, icon: Wallet, roles: ['client'] },
+    { id: 'trading', label: language === 'ru' ? 'Рынки' : 'Markets', icon: TrendingUp, roles: ['client'] },
+    { id: 'offers', label: language === 'ru' ? 'Предложения банка' : 'Bank Offers', icon: Gift, roles: ['client'] },
     { id: 'bot', label: t.bot, icon: Bot, roles: ['client'] },
     { id: 'chat', label: t.messages, icon: MessageSquare, roles: ['client', 'manager', 'team_lead', 'admin'] },
     { id: 'admin', label: userRole === 'manager' ? (language === 'ru' ? 'Клиенты' : 'Clients') : t.management, icon: Users, roles: ['manager', 'team_lead', 'admin'] },
@@ -58,7 +61,7 @@ export default function Layout({
 
   const filteredItems = menuItems.filter(item => item.roles.includes(userRole));
 
-  const SidebarContent = () => (
+  const sidebarContent = (
     <>
       <div className="p-6 flex items-center justify-between">
         {(isSidebarOpen || isMobileMenuOpen) && (
@@ -139,7 +142,7 @@ export default function Layout({
         animate={{ width: isSidebarOpen ? 280 : 80 }}
         className="bg-[#FF0000] text-white hidden lg:flex flex-col shadow-xl z-50 overflow-hidden"
       >
-        <SidebarContent />
+        {sidebarContent}
       </motion.aside>
 
       {/* Mobile Drawer */}
@@ -160,7 +163,7 @@ export default function Layout({
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed top-0 left-0 bottom-0 w-[280px] bg-[#FF0000] text-white z-[70] flex flex-col lg:hidden"
             >
-              <SidebarContent />
+              {sidebarContent}
             </motion.aside>
           </>
         )}
@@ -203,3 +206,4 @@ export default function Layout({
     </div>
   );
 }
+);

@@ -27,7 +27,7 @@ interface WalletProps {
   language: Language;
 }
 
-export default function Wallet({ user, transactions, onDeposit, onWithdraw, language }: WalletProps) {
+export default React.memo(function Wallet({ user, transactions, onDeposit, onWithdraw, language }: WalletProps) {
   const [amount, setAmount] = useState<string>('0');
   const t = translations[language];
   const [filter, setFilter] = useState<string>('all');
@@ -434,3 +434,4 @@ export default function Wallet({ user, transactions, onDeposit, onWithdraw, lang
     </div>
   );
 }
+);

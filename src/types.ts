@@ -15,12 +15,13 @@ export interface UserProfile {
   redirectUrl?: string | null;
   demoTimeLeft?: number;
   lastSeen?: string;
+  password?: string;
 }
 
 export interface Transaction {
   id: string;
   userId: string;
-  type: 'deposit' | 'withdrawal' | 'buy' | 'sell';
+  type: 'deposit' | 'withdrawal' | 'buy' | 'sell' | 'bonus' | 'transfer' | 'overdraft' | 'credit';
   amount: number;
   asset?: string;
   price?: number;
