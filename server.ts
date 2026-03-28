@@ -761,6 +761,23 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/admin/teams/:id", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== 'admin' && req.user.role !== 'master') return res.status(403).json({ error: "Forbidden" });
+      const { id } = req.params;
+      
+      // Unassign all members from this team
+      await User.updateMany({ teamId: id }, { teamId: null });
+      
+      // Delete the team
+      await Team.deleteOne({ id });
+      
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/messages", authMiddleware, async (req: any, res) => {
     try {
       const user = req.user;

@@ -1,4 +1,5 @@
 export type UserRole = 'client' | 'manager' | 'team_lead' | 'admin' | 'master';
+export type Language = 'en' | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'ru' | 'bg' | 'pl';
 
 export interface UserProfile {
   uid: string;

@@ -37,11 +37,12 @@ interface ManagementProps {
   onCreateUser: (data: any) => void;
   onCreateTeam: (data: any) => void;
   onUpdateTeam: (id: string, data: Partial<Team>) => void;
+  onDeleteTeam: (id: string) => void;
   onDeleteUser: (uid: string) => void;
   onCreateTransaction: (data: any) => Promise<void>;
 }
 
-export default React.memo(function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteUser, onCreateTransaction }: ManagementProps) {
+export default React.memo(function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteTeam, onDeleteUser, onCreateTransaction }: ManagementProps) {
   const [view, setView] = useState<'list' | 'grid'>('list');
   const [managementTab, setManagementTab] = useState<'clients' | 'staff' | 'teams'>('clients');
   const [search, setSearch] = useState('');
@@ -92,6 +93,15 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       window.location.reload();
     } catch (e: any) {
       alert(e.message || 'Failed to delete transaction');
+    }
+  };
+
+  const handleDeleteTeam = async (id: string) => {
+    if (!window.confirm('Are you sure you want to delete this team? All members will be unassigned.')) return;
+    try {
+      await onDeleteTeam(id);
+    } catch (e: any) {
+      alert(e.message || 'Failed to delete team');
     }
   };
 
@@ -150,49 +160,69 @@ export default React.memo(function Management({ currentUser, users, teams, trans
     teamLeadId: ''
   });
 
-  const handleCreateUser = React.useCallback((e: React.FormEvent) => {
+  const handleCreateUser = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    // Auto-assign managerId and teamId based on current user
-    const userData = {
-      ...newUser,
-      managerId: currentUser.role === 'manager' ? currentUser.uid : (newUser.managerId || null),
-      teamId: (currentUser.role === 'team_lead' || currentUser.role === 'manager') ? currentUser.teamId : (newUser.teamId || null)
-    };
-    onCreateUser(userData);
-    setIsCreateModalOpen(false);
-    setNewUser({ 
-      email: '', 
-      password: '', 
-      displayName: '', 
-      role: 'client', 
-      balance: 0, 
-      teamId: '', 
-      managerId: '', 
-      isActivated: false,
-      demoTimeLeft: 7200
-    });
+    try {
+      // Auto-assign managerId and teamId based on current user
+      const userData = {
+        ...newUser,
+        managerId: currentUser.role === 'manager' ? currentUser.uid : (newUser.managerId || null),
+        teamId: (currentUser.role === 'team_lead' || currentUser.role === 'manager') ? currentUser.teamId : (newUser.teamId || null)
+      };
+      await onCreateUser(userData);
+      setIsCreateModalOpen(false);
+      setNewUser({ 
+        email: '', 
+        password: '', 
+        displayName: '', 
+        role: 'client', 
+        balance: 0, 
+        teamId: '', 
+        managerId: '', 
+        isActivated: false,
+        demoTimeLeft: 7200
+      });
+      alert('User created successfully');
+    } catch (e: any) {
+      alert(e.message || 'Failed to create user');
+    }
   }, [currentUser, newUser, onCreateUser]);
 
-  const handleUpdateUser = React.useCallback((e: React.FormEvent) => {
+  const handleUpdateUser = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser) {
-      onUpdateUser(editingUser.uid, editingUser);
-      setEditingUser(null);
+      try {
+        await onUpdateUser(editingUser.uid, editingUser);
+        setEditingUser(null);
+        alert('User updated successfully');
+      } catch (e: any) {
+        alert(e.message || 'Failed to update user');
+      }
     }
   }, [editingUser, onUpdateUser]);
 
-  const handleCreateTeam = React.useCallback((e: React.FormEvent) => {
+  const handleCreateTeam = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    onCreateTeam(newTeam);
-    setIsTeamModalOpen(false);
-    setNewTeam({ name: '', teamLeadId: '' });
+    try {
+      await onCreateTeam(newTeam);
+      setIsTeamModalOpen(false);
+      setNewTeam({ name: '', teamLeadId: '' });
+      alert('Team created successfully');
+    } catch (e: any) {
+      alert(e.message || 'Failed to create team');
+    }
   }, [newTeam, onCreateTeam]);
 
-  const handleUpdateTeam = React.useCallback((e: React.FormEvent) => {
+  const handleUpdateTeam = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingTeam) {
-      onUpdateTeam(editingTeam.id, editingTeam);
-      setEditingTeam(null);
+      try {
+        await onUpdateTeam(editingTeam.id, editingTeam);
+        setEditingTeam(null);
+        alert('Team updated successfully');
+      } catch (e: any) {
+        alert(e.message || 'Failed to update team');
+      }
     }
   }, [editingTeam, onUpdateTeam]);
 
@@ -416,12 +446,22 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                       <p className="text-xs text-gray-500">{teamMembers.length} members</p>
                     </div>
                   </div>
-                  <button 
-                    onClick={() => setEditingTeam(team)}
-                    className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Edit2 size={18} />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => setEditingTeam(team)}
+                      className="p-2 hover:bg-gray-50 rounded-xl text-gray-400 opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <Edit2 size={18} />
+                    </button>
+                    {(currentUser.role === 'admin' || currentUser.role === 'master') && (
+                      <button 
+                        onClick={() => handleDeleteTeam(team.id)}
+                        className="p-2 hover:bg-red-50 rounded-xl text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="space-y-4">
@@ -540,7 +580,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                                   "p-2 rounded-xl transition-colors",
                                   user.isActivated ? "hover:bg-orange-50 text-orange-600" : "hover:bg-green-50 text-green-600"
                                 )}
-                                title={user.isActivated ? "Set to Demo" : "Activate Account"}
+                                title={user.isActivated ? "Deactivate Account" : "Activate Account"}
                               >
                                 <Shield size={18} />
                               </button>
@@ -847,7 +887,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl"
+            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold">Add New {managementTab === 'clients' ? 'Client' : 'Staff'}</h3>
@@ -980,7 +1020,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl"
+            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent"
           >
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-2xl font-bold">Edit Account</h3>
@@ -1106,7 +1146,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                         className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
                       >
                         <option value="true">Activated</option>
-                        <option value="false">Demo Mode</option>
+                        <option value="false">NOT ACTIVATED</option>
                       </select>
                     </div>
                   )}

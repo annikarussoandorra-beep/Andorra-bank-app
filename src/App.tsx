@@ -128,20 +128,9 @@ export default function App() {
           console.log(`Redirecting from ${window.location.pathname} to ${targetUrl}`);
           setIsRedirecting(true);
           
-          // Clear the redirectUrl in the database before redirecting to prevent loops
-          api.updateUser(user.uid, { redirectUrl: null }).then(() => {
-            // Also update local state to be safe
-            setUser(prev => prev ? { ...prev, redirectUrl: null } : null);
-            window.location.href = targetUrl;
-          }).catch(() => {
-            // Fallback if update fails
-            setUser(prev => prev ? { ...prev, redirectUrl: null } : null);
-            window.location.href = targetUrl;
-          });
+          window.location.href = targetUrl;
         } else {
-          // If we are already at the target, just clear it
-          api.updateUser(user.uid, { redirectUrl: null });
-          setUser(prev => prev ? { ...prev, redirectUrl: null } : null);
+          // If we are already at the target, do nothing
         }
       }
     }
@@ -369,56 +358,17 @@ export default function App() {
   }, [user, botConfig.botStartTime]);
 
   const createUser = React.useCallback(async (data: any) => {
-    try {
-      const response = await fetch('/api/admin/create-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const result = await response.json();
-      if (result.success) {
-        alert('User created successfully');
-      } else {
-        alert('Error: ' + result.error);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    await api.createUser(data);
   }, []);
 
   const deleteUser = React.useCallback(async (uid: string) => {
-    try {
-      const response = await fetch(`/api/admin/users/${uid}`, {
-        method: 'DELETE'
-      });
-      const result = await response.json();
-      if (result.success) {
-        const users = await api.getUsers();
-        setAllUsers(users);
-      } else {
-        console.error('Error deleting user:', result.error);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    await api.deleteUser(uid);
+    const users = await api.getUsers();
+    setAllUsers(users);
   }, []);
 
   const createTeam = React.useCallback(async (data: any) => {
-    try {
-      const response = await fetch('/api/admin/create-team', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const result = await response.json();
-      if (result.success) {
-        alert('Team created successfully');
-      } else {
-        alert('Error: ' + result.error);
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    await api.createTeam(data);
   }, []);
 
   const handleSendMessage = React.useCallback(async (receiverId: string, data: Partial<ChatMessage>) => {
@@ -520,51 +470,33 @@ export default function App() {
   }, [user]);
 
   const handleUpdateUser = React.useCallback(async (uid: string, data: Partial<UserProfile>) => {
-    try {
-      await fetch(`/api/admin/update-user/${uid}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const users = await api.getUsers();
-      setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(users) ? prev : users);
-    } catch (e) {
-      console.error("Failed to update user", e);
-    }
+    await api.adminUpdateUser(uid, data);
+    const users = await api.getUsers();
+    setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(users) ? prev : users);
   }, []);
 
   const handleCreateUser = React.useCallback(async (data: any) => {
-    try {
-      await createUser(data);
-      const users = await api.getUsers();
-      setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(users) ? prev : users);
-    } catch (e) {
-      console.error("Failed to create user", e);
-    }
+    await createUser(data);
+    const users = await api.getUsers();
+    setAllUsers(prev => JSON.stringify(prev) === JSON.stringify(users) ? prev : users);
   }, [createUser]);
 
   const handleCreateTeamAction = React.useCallback(async (data: any) => {
-    try {
-      await createTeam(data);
-      const teamsData = await api.getTeams();
-      setTeams(prev => JSON.stringify(prev) === JSON.stringify(teamsData) ? prev : teamsData);
-    } catch (e) {
-      console.error("Failed to create team", e);
-    }
+    await createTeam(data);
+    const teamsData = await api.getTeams();
+    setTeams(prev => JSON.stringify(prev) === JSON.stringify(teamsData) ? prev : teamsData);
   }, [createTeam]);
 
   const handleUpdateTeamAction = React.useCallback(async (id: string, data: Partial<Team>) => {
-    try {
-      await fetch(`/api/admin/update-team/${id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const teamsData = await api.getTeams();
-      setTeams(prev => JSON.stringify(prev) === JSON.stringify(teamsData) ? prev : teamsData);
-    } catch (e) {
-      console.error("Failed to update team", e);
-    }
+    await api.updateTeam(id, data);
+    const teamsData = await api.getTeams();
+    setTeams(prev => JSON.stringify(prev) === JSON.stringify(teamsData) ? prev : teamsData);
+  }, []);
+
+  const handleDeleteTeamAction = React.useCallback(async (id: string) => {
+    await api.deleteTeam(id);
+    const teamsData = await api.getTeams();
+    setTeams(prev => JSON.stringify(prev) === JSON.stringify(teamsData) ? prev : teamsData);
   }, []);
 
   const handleAdminCreateTransaction = React.useCallback(async (data: any) => {
@@ -844,6 +776,7 @@ export default function App() {
               onCreateUser={handleCreateUser}
               onCreateTeam={handleCreateTeamAction}
               onUpdateTeam={handleUpdateTeamAction}
+              onDeleteTeam={handleDeleteTeamAction}
               onDeleteUser={deleteUser}
               onCreateTransaction={handleAdminCreateTransaction}
             />
@@ -915,7 +848,7 @@ export default function App() {
                     ? (user.isActivated ? "bg-green-50 text-green-600" : "bg-red-50 text-[#FF0000]")
                     : "bg-blue-50 text-blue-600"
                 )}>
-                  {user.role === 'client' ? (user.isActivated ? 'Active Account' : 'Demo Account') : user.role}
+                  {user.role === 'client' ? (user.isActivated ? 'Active Account' : 'NOT ACTIVATED') : user.role}
                 </span>
                 {user.role === 'client' && !user.isActivated && (
                   <p className="text-xs text-red-600 font-bold">Account needs activation</p>

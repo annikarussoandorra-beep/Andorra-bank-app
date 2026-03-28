@@ -168,6 +168,74 @@ export const api = {
     }
     return res.json();
   },
+  adminUpdateUser: async (uid: string, data: any) => {
+    const res = await fetch(`/api/admin/update-user/${uid}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Admin update user failed' }));
+      throw new Error(error.error || 'Admin update user failed');
+    }
+    return res.json();
+  },
+  createUser: async (data: any) => {
+    const res = await fetch('/api/admin/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Create user failed' }));
+      throw new Error(error.error || 'Create user failed');
+    }
+    return res.json();
+  },
+  deleteUser: async (uid: string) => {
+    const res = await fetch(`/api/admin/users/${uid}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Delete user failed' }));
+      throw new Error(error.error || 'Delete user failed');
+    }
+    return res.json();
+  },
+  createTeam: async (data: any) => {
+    const res = await fetch('/api/admin/create-team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Create team failed' }));
+      throw new Error(error.error || 'Create team failed');
+    }
+    return res.json();
+  },
+  updateTeam: async (id: string, data: Partial<Team>) => {
+    const res = await fetch(`/api/admin/update-team/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Update team failed' }));
+      throw new Error(error.error || 'Update team failed');
+    }
+    return res.json();
+  },
+  deleteTeam: async (id: string) => {
+    const res = await fetch(`/api/admin/teams/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Delete team failed' }));
+      throw new Error(error.error || 'Delete team failed');
+    }
+    return res.json();
+  },
   deleteTransaction: async (id: string) => {
     const res = await fetch(`/api/admin/transactions/${id}`, {
       method: 'DELETE'

@@ -30,8 +30,8 @@ export default function Offers({ user, language }: OffersProps) {
         ? 'Эксклюзивные условия для активных клиентов. Минимальная процентная ставка и гибкий график платежей.'
         : 'Exclusive conditions for active clients. Minimal interest rate and flexible payment schedule.',
       features: isRu 
-        ? ['Ставка от 0.1% годовых', 'Без первоначального взноса', 'Одобрение за 1 час']
-        : ['Rate from 0.1% APR', 'Zero down payment', '1-hour approval'],
+        ? ['Ставка от 1.1% годовых', 'Без первоначального взноса', 'Одобрение за 1 час']
+        : ['Rate from 1.1% APR', 'Zero down payment', '1-hour approval'],
       bg: 'bg-red-50',
       border: 'border-red-100'
     },
@@ -44,22 +44,22 @@ export default function Offers({ user, language }: OffersProps) {
         ? 'Статусная карта с уникальными привилегиями, кэшбэком и бесплатным обслуживанием.'
         : 'Status card with unique privileges, cashback, and free maintenance.',
       features: isRu
-        ? ['0% на все покупки до 365 дней', 'Бесплатный консьерж-сервис', 'Доступ в бизнес-залы']
-        : ['0% on all purchases up to 365 days', 'Free concierge service', 'Business lounge access'],
+        ? ['1.75% на все покупки до 365 дней', 'Снижение до 0.7% при объеме торгов >10 000 €', 'Доступ в бизнес-залы']
+        : ['1.75% on all purchases up to 365 days', 'Reduction to 0.7% with volume >10,000 €', 'Business lounge access'],
       bg: 'bg-blue-50',
       border: 'border-blue-100'
     },
     {
       id: 'personal-loan',
       icon: <Car className="text-green-600" size={32} />,
-      title: isRu ? 'Беспроцентный кредит' : 'Interest-Free Loan',
+      title: isRu ? 'Кредит' : 'Personal Loan',
       amount: isRu ? 'до 400 000 €' : 'up to 400,000 €',
       description: isRu
-        ? 'На покупку автомобиля мечты или любые личные нужды без переплат.'
-        : 'For buying your dream car or any personal needs without overpayments.',
+        ? 'На покупку автомобиля мечты или любые личные нужды.'
+        : 'For buying your dream car or any personal needs.',
       features: isRu
-        ? ['0% переплат', 'Срок до 7 лет', 'Без залога и поручителей']
-        : ['0% overpayment', 'Term up to 7 years', 'No collateral or guarantors'],
+        ? ['Ставка 1.7% годовых', 'Срок до 7 лет', 'Без залога и поручителей']
+        : ['Interest rate 1.7% APR', 'Term up to 7 years', 'No collateral or guarantors'],
       bg: 'bg-green-50',
       border: 'border-green-100'
     }
@@ -92,7 +92,7 @@ export default function Offers({ user, language }: OffersProps) {
           <div key={offer.id} className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300 group">
             <div className={`p-8 ${offer.bg} border-b ${offer.border} flex flex-col items-center text-center relative overflow-hidden`}>
               <div className="absolute top-0 right-0 p-4 opacity-10 transform translate-x-4 -translate-y-4 group-hover:scale-110 transition-transform duration-500">
-                {React.cloneElement(offer.icon as React.ReactElement, { size: 120 })}
+                {React.cloneElement(offer.icon as React.ReactElement<any>, { size: 120 })}
               </div>
               <div className="bg-white p-4 rounded-2xl shadow-sm mb-6 relative z-10">
                 {offer.icon}
