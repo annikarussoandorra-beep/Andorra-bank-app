@@ -585,7 +585,7 @@ export default function App() {
     return messages.filter(m => {
       if (m.read) return false;
       if (m.receiverId === user.uid) return true;
-      if ((user.role === 'admin' || user.role === 'manager') && m.receiverId === 'support-team') return true;
+      if (['admin', 'manager', 'team_lead', 'master'].includes(user.role) && m.receiverId === 'support-team') return true;
       return false;
     }).length;
   }, [messages, user]);
@@ -593,8 +593,20 @@ export default function App() {
   const chatContacts = React.useMemo(() => {
     if (!user) return [];
     if (user.role === 'client') {
+      const staffWithHistory = allUsers.filter(u => {
+        if (u.uid === user.managerId) return true;
+        if (['admin', 'manager', 'team_lead', 'master'].includes(u.role)) {
+          const hasDirectMessages = messages.some(m => 
+            (m.senderId === u.uid && m.receiverId === user.uid) ||
+            (m.senderId === user.uid && m.receiverId === u.uid)
+          );
+          return hasDirectMessages;
+        }
+        return false;
+      });
+
       return [
-        ...allUsers.filter(u => u.uid === user.managerId),
+        ...staffWithHistory,
         {
           uid: 'support-team',
           displayName: 'Support Service',
@@ -610,7 +622,7 @@ export default function App() {
       ];
     }
     return allUsers.filter(u => u.uid !== user.uid);
-  }, [allUsers, user]);
+  }, [allUsers, user, messages]);
 
   if (loading) {
     return (

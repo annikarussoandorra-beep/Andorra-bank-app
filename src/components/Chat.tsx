@@ -242,13 +242,29 @@ export default React.memo(function Chat({
               // Staff: show direct clients (not support-team)
               return contact.uid !== 'support-team';
             } else {
-              // Staff: show clients who have messaged support
-              const hasSupportMsgs = messages.some(m => 
-                (m.senderId === contact.uid && m.receiverId === 'support-team') ||
-                (m.senderId === 'support-team' && m.receiverId === contact.uid)
-              );
-              return hasSupportMsgs;
+              // Staff: show all clients in support tab
+              return contact.role === 'client';
             }
+          }).sort((a, b) => {
+            const getLastMsgTime = (contactUid: string) => {
+              const msgs = messages.filter(m => {
+                const isDirect = (m.senderId === contactUid && m.receiverId === currentUser.uid) ||
+                               (m.senderId === currentUser.uid && m.receiverId === contactUid);
+                const isSupport = (m.senderId === contactUid && m.receiverId === 'support-team') ||
+                                  (m.senderId === 'support-team' && m.receiverId === contactUid);
+                
+                if (!isStaff) {
+                  if (contactUid === 'support-team') return isSupport;
+                  return isDirect;
+                }
+                
+                if (chatTab === 'support') return isSupport;
+                return isDirect;
+              });
+              if (msgs.length === 0) return 0;
+              return new Date(msgs[msgs.length - 1].timestamp).getTime();
+            };
+            return getLastMsgTime(b.uid) - getLastMsgTime(a.uid);
           }).map((contact) => {
             const lastMsg = messages.filter(m => {
               const isDirect = (m.senderId === contact.uid && m.receiverId === currentUser.uid) ||
