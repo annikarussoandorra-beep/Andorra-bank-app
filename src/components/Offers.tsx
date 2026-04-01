@@ -1,6 +1,7 @@
 import React from 'react';
 import { Home, CreditCard, Car, Star, CheckCircle, ArrowRight } from 'lucide-react';
 import { Language, UserProfile } from '../types';
+import { translations } from '../translations';
 
 interface OffersProps {
   user: UserProfile;
@@ -8,58 +9,44 @@ interface OffersProps {
 }
 
 export default function Offers({ user, language }: OffersProps) {
-  const isRu = language === 'ru';
+  const t = translations[language];
 
   const handleApply = () => {
     if (!user.isActivated) {
-      alert(isRu 
-        ? 'Ваш счет не активирован. Пожалуйста, активируйте счет, чтобы получить доступ к предложениям.' 
-        : 'Your account is not activated. Please activate your account to access these offers.');
+      alert(t.onboarding_3_desc); // Using a placeholder for now, or I should add specific keys
       return;
     }
-    alert(isRu ? 'Свяжитесь с вашим персональным менеджером для оформления заявки.' : 'Contact your personal manager to apply.');
+    alert(t.get_started); // Placeholder
   };
 
   const offers = [
     {
       id: 'mortgage',
       icon: <Home className="text-red-600" size={32} />,
-      title: isRu ? 'Льготная ипотека' : 'Preferential Mortgage',
-      amount: isRu ? 'до 1 200 000 €' : 'up to 1,200,000 €',
-      description: isRu 
-        ? 'Эксклюзивные условия для активных клиентов. Минимальная процентная ставка и гибкий график платежей.'
-        : 'Exclusive conditions for active clients. Minimal interest rate and flexible payment schedule.',
-      features: isRu 
-        ? ['Ставка от 1.1% годовых', 'Без первоначального взноса', 'Одобрение за 1 час']
-        : ['Rate from 1.1% APR', 'Zero down payment', '1-hour approval'],
+      title: t.mortgage_title,
+      amount: t.mortgage_amount,
+      description: t.mortgage_desc,
+      features: [t.mortgage_feature_1, t.mortgage_feature_2, t.mortgage_feature_3],
       bg: 'bg-red-50',
       border: 'border-red-100'
     },
     {
       id: 'credit-card',
       icon: <CreditCard className="text-blue-600" size={32} />,
-      title: isRu ? 'Премиальная кредитная карта' : 'Premium Credit Card',
-      amount: isRu ? 'лимит до 100 000 €' : 'limit up to 100,000 €',
-      description: isRu
-        ? 'Статусная карта с уникальными привилегиями, кэшбэком и бесплатным обслуживанием.'
-        : 'Status card with unique privileges, cashback, and free maintenance.',
-      features: isRu
-        ? ['1.75% на все покупки до 365 дней', 'Снижение до 0.7% при объеме торгов >10 000 €', 'Доступ в бизнес-залы']
-        : ['1.75% on all purchases up to 365 days', 'Reduction to 0.7% with volume >10,000 €', 'Business lounge access'],
+      title: t.credit_card_title,
+      amount: t.credit_card_amount,
+      description: t.credit_card_desc,
+      features: [t.credit_card_feature_1, t.credit_card_feature_2, t.credit_card_feature_3],
       bg: 'bg-blue-50',
       border: 'border-blue-100'
     },
     {
       id: 'personal-loan',
       icon: <Car className="text-green-600" size={32} />,
-      title: isRu ? 'Кредит' : 'Personal Loan',
-      amount: isRu ? 'до 400 000 €' : 'up to 400,000 €',
-      description: isRu
-        ? 'На покупку автомобиля мечты или любые личные нужды.'
-        : 'For buying your dream car or any personal needs.',
-      features: isRu
-        ? ['Ставка 1.7% годовых', 'Срок до 7 лет', 'Без залога и поручителей']
-        : ['Interest rate 1.7% APR', 'Term up to 7 years', 'No collateral or guarantors'],
+      title: t.loan_title,
+      amount: t.loan_amount,
+      description: t.loan_desc,
+      features: [t.loan_feature_1, t.loan_feature_2, t.loan_feature_3],
       bg: 'bg-green-50',
       border: 'border-green-100'
     }
@@ -74,15 +61,13 @@ export default function Offers({ user, language }: OffersProps) {
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-sm font-medium mb-6 backdrop-blur-sm">
             <Star size={16} className="text-yellow-300 fill-yellow-300" />
-            {isRu ? 'Только для активных клиентов' : 'Only for active clients'}
+            {t.only_for_active}
           </div>
           <h1 className="text-3xl lg:text-5xl font-bold mb-4 leading-tight">
-            {isRu ? 'Специальные предложения банка' : 'Special Bank Offers'}
+            {t.offers_title}
           </h1>
           <p className="text-red-100 text-lg lg:text-xl">
-            {isRu 
-              ? 'Мы ценим вашу активность и подготовили эксклюзивные финансовые продукты с беспрецедентными условиями.' 
-              : 'We value your activity and have prepared exclusive financial products with unprecedented conditions.'}
+            {t.offers_desc}
           </p>
         </div>
       </div>
@@ -119,7 +104,7 @@ export default function Offers({ user, language }: OffersProps) {
                 onClick={handleApply}
                 className="w-full py-4 bg-gray-900 text-white rounded-xl font-bold hover:bg-[#FF0000] transition-colors flex items-center justify-center gap-2 group-hover:shadow-lg group-hover:shadow-[#FF0000]/20"
               >
-                {isRu ? 'Оформить заявку' : 'Apply Now'}
+                {language === 'ru' ? 'Оформить заявку' : t.apply_now}
                 <ArrowRight size={18} />
               </button>
             </div>

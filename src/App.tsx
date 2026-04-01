@@ -15,6 +15,7 @@ import Onboarding from './components/Onboarding';
 import { Language, translations } from './translations';
 import { Shield, ArrowRight, TrendingUp, Lock, Mail, Key } from 'lucide-react';
 import { motion } from 'motion/react';
+import { checkNotificationPermission, requestNotificationPermission, subscribeToPush } from './services/pushNotification';
 
 const INITIAL_ASSETS: Asset[] = [
   // Commodities
@@ -87,6 +88,24 @@ export default function App() {
   });
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+
+  useEffect(() => {
+    if (user && user.role === 'client') {
+      const setupNotifications = async () => {
+        const permission = await checkNotificationPermission();
+        if (permission === 'default') {
+          const newPermission = await requestNotificationPermission();
+          if (newPermission === 'granted') {
+            await subscribeToPush();
+          }
+        } else if (permission === 'granted') {
+          // Even if granted, try to subscribe to ensure current device is registered
+          await subscribeToPush();
+        }
+      };
+      setupNotifications();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (user && user.role === 'client' && !localStorage.getItem(`onboarding_completed_${user.uid}`)) {
@@ -266,6 +285,19 @@ export default function App() {
     try {
       const loggedInUser = await api.login(email, password);
       console.log("App: handleLogin successful", loggedInUser);
+      
+      // Prompt for notifications immediately after login if client
+      if (loggedInUser && loggedInUser.role === 'client') {
+        const permission = await checkNotificationPermission();
+        if (permission === 'default') {
+          const newPermission = await requestNotificationPermission();
+          if (newPermission === 'granted') {
+            await subscribeToPush();
+          }
+        } else if (permission === 'granted') {
+          await subscribeToPush();
+        }
+      }
     } catch (error: any) {
       console.error("App: handleLogin failed", error);
       setLoginError('Invalid email or password');
@@ -548,10 +580,15 @@ export default function App() {
 
   const handleViewAllWallet = React.useCallback(() => setActiveTab('wallet'), []);
 
-  const unreadMessagesCount = React.useMemo(() => 
-    messages.filter(m => m.receiverId === user?.uid && !m.read).length,
-    [messages, user?.uid]
-  );
+  const unreadMessagesCount = React.useMemo(() => {
+    if (!user) return 0;
+    return messages.filter(m => {
+      if (m.read) return false;
+      if (m.receiverId === user.uid) return true;
+      if ((user.role === 'admin' || user.role === 'manager') && m.receiverId === 'support-team') return true;
+      return false;
+    }).length;
+  }, [messages, user]);
 
   const chatContacts = React.useMemo(() => {
     if (!user) return [];

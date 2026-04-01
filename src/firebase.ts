@@ -72,7 +72,7 @@ export const api = {
   },
   getAssets: async (): Promise<Asset[]> => {
     try {
-      const res = await fetch('/api/assets');
+      const res = await api.fetchWithRetry('/api/assets');
       if (!res.ok) return [];
       return res.json();
     } catch (e) {
@@ -80,9 +80,26 @@ export const api = {
       return [];
     }
   },
+  // Helper for fetch with retry
+  fetchWithRetry: async (url: string, options: RequestInit = {}, retries = 3, delay = 1000): Promise<Response> => {
+    try {
+      const res = await fetch(url, options);
+      if (!res.ok && retries > 0 && res.status >= 500) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return api.fetchWithRetry(url, options, retries - 1, delay * 2);
+      }
+      return res;
+    } catch (e) {
+      if (retries > 0) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return api.fetchWithRetry(url, options, retries - 1, delay * 2);
+      }
+      throw e;
+    }
+  },
   getTransactions: async (): Promise<Transaction[]> => {
     try {
-      const res = await fetch('/api/transactions');
+      const res = await api.fetchWithRetry('/api/transactions');
       if (!res.ok) return [];
       return res.json();
     } catch (e) {
@@ -101,7 +118,7 @@ export const api = {
   },
   getUsers: async (): Promise<UserProfile[]> => {
     try {
-      const res = await fetch('/api/users');
+      const res = await api.fetchWithRetry('/api/users');
       if (!res.ok) return [];
       return res.json();
     } catch (e) {
@@ -111,7 +128,7 @@ export const api = {
   },
   getTeams: async (): Promise<Team[]> => {
     try {
-      const res = await fetch('/api/teams');
+      const res = await api.fetchWithRetry('/api/teams');
       if (!res.ok) return [];
       return res.json();
     } catch (e) {
@@ -121,7 +138,7 @@ export const api = {
   },
   getMessages: async (): Promise<ChatMessage[]> => {
     try {
-      const res = await fetch('/api/messages');
+      const res = await api.fetchWithRetry('/api/messages');
       if (!res.ok) return [];
       return res.json();
     } catch (e) {
@@ -140,7 +157,7 @@ export const api = {
   },
   getBotConfig: async (): Promise<BotConfig | null> => {
     try {
-      const res = await fetch('/api/bots');
+      const res = await api.fetchWithRetry('/api/bots');
       if (!res.ok) return null;
       return res.json();
     } catch (e) {
@@ -248,7 +265,7 @@ export const api = {
   },
   getUser: async (uid: string): Promise<UserProfile | null> => {
     try {
-      const res = await fetch(`/api/users/${uid}`);
+      const res = await api.fetchWithRetry(`/api/users/${uid}`);
       if (!res.ok) return null;
       return res.json();
     } catch (e) {
@@ -271,6 +288,16 @@ export const api = {
       body: JSON.stringify({ demoTimeLeft })
     });
     return response.json();
+  },
+  sync: async () => {
+    try {
+      const res = await api.fetchWithRetry('/api/sync');
+      if (!res.ok) return null;
+      return res.json();
+    } catch (e) {
+      console.error("Sync failed", e);
+      return null;
+    }
   },
   markMessagesAsRead: async (senderId: string) => {
     const res = await fetch('/api/messages/read', {

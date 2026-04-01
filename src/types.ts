@@ -1,6 +1,14 @@
 export type UserRole = 'client' | 'manager' | 'team_lead' | 'admin' | 'master';
 export type Language = 'en' | 'es' | 'fr' | 'de' | 'it' | 'pt' | 'ru' | 'bg' | 'pl';
 
+export interface PushSubscription {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -17,6 +25,7 @@ export interface UserProfile {
   demoTimeLeft?: number;
   lastSeen?: string;
   password?: string;
+  pushSubscriptions?: PushSubscription[];
 }
 
 export interface Transaction {

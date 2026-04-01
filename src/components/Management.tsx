@@ -21,7 +21,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Clock,
-  RefreshCw
+  RefreshCw,
+  Bell
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { UserProfile, UserRole, Team, Transaction, BotConfig } from '../types';
@@ -44,15 +45,27 @@ interface ManagementProps {
 
 export default React.memo(function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteTeam, onDeleteUser, onCreateTransaction }: ManagementProps) {
   const [view, setView] = useState<'list' | 'grid'>('list');
-  const [managementTab, setManagementTab] = useState<'clients' | 'staff' | 'teams'>('clients');
+  const [managementTab, setManagementTab] = useState<'clients' | 'staff' | 'teams' | 'notifications'>('clients');
   const [search, setSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [isNotificationModalOpen, setIsNotificationModalOpen] = useState(false);
+  const [editingNotification, setEditingNotification] = useState<any | null>(null);
+  const [notificationForm, setNotificationForm] = useState({
+    userId: '',
+    title: '',
+    body: '',
+    isScheduled: false,
+    frequency: 'once', // 'once' | 'daily' | 'every3days'
+    scheduledTime: '', // time (HH:mm) if frequency != 'once', datetime if frequency == 'once'
+  });
+  const [scheduledNotifications, setScheduledNotifications] = useState<any[]>([]);
+  const [subscriptionStats, setSubscriptionStats] = useState<{[key: string]: number}>({});
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editingUserBotConfig, setEditingUserBotConfig] = useState<BotConfig | null>(null);
-  const [activeEditTab, setActiveEditTab] = useState<'profile' | 'bot'>('profile');
+  const [activeEditTab, setActiveEditTab] = useState<'profile' | 'bot' | 'notifications'>('profile');
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,6 +84,89 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       setEditingUserBotConfig(null);
     }
   }, [editingUser]);
+
+  useEffect(() => {
+    if (managementTab === 'notifications') {
+      fetch('/api/admin/notifications/scheduled')
+        .then(res => res.json())
+        .then(setScheduledNotifications);
+        
+      // Fetch subscription stats
+      fetch('/api/admin/notifications/stats')
+        .then(res => res.json())
+        .then(setSubscriptionStats);
+    }
+  }, [managementTab]);
+
+  const handleSendNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const isEditing = !!editingNotification;
+    const endpoint = isEditing 
+      ? `/api/admin/notifications/schedule/${editingNotification.id}`
+      : (notificationForm.isScheduled ? '/api/admin/notifications/schedule' : '/api/admin/notifications/send');
+    
+    const method = isEditing ? 'PATCH' : 'POST';
+    
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: notificationForm.userId,
+          title: notificationForm.title,
+          body: notificationForm.body,
+          isScheduled: notificationForm.isScheduled,
+          frequency: notificationForm.isScheduled ? notificationForm.frequency : 'once',
+          scheduledTime: notificationForm.isScheduled ? notificationForm.scheduledTime : undefined
+        })
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to process notification');
+      }
+      
+      alert(isEditing ? 'Notification updated' : (notificationForm.isScheduled ? 'Notification scheduled' : 'Notification sent'));
+      setIsNotificationModalOpen(false);
+      setEditingNotification(null);
+      setNotificationForm({ userId: '', title: '', body: '', scheduledTime: '', isScheduled: false, frequency: 'once' });
+      
+      // Refresh scheduled list
+      fetch('/api/admin/notifications/scheduled')
+        .then(res => res.json())
+        .then(setScheduledNotifications);
+        
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    if (!window.confirm('Are you sure you want to cancel this scheduled notification?')) return;
+    try {
+      const response = await fetch(`/api/admin/notifications/schedule/${id}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) throw new Error('Failed to delete notification');
+      setScheduledNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handleEditNotification = (notif: any) => {
+    setEditingNotification(notif);
+    setNotificationForm({
+      userId: notif.userId,
+      title: notif.title,
+      body: notif.body,
+      scheduledTime: notif.scheduledTime.substring(0, 16), // Format for datetime-local
+      isScheduled: true,
+      frequency: notif.frequency || 'once'
+    });
+    setIsNotificationModalOpen(true);
+  };
 
   const handleUpdateBotConfig = React.useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -350,6 +446,17 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                 Teams
               </button>
             )}
+            {(currentUser.role === 'admin' || currentUser.role === 'master' || currentUser.role === 'manager') && (
+              <button 
+                onClick={() => setManagementTab('notifications')}
+                className={cn(
+                  "px-4 lg:px-6 py-2.5 lg:py-3 rounded-2xl font-bold transition-all text-sm lg:text-base",
+                  managementTab === 'notifications' ? "bg-white shadow-xl text-[#FF0000]" : "text-gray-400 hover:text-gray-600"
+                )}
+              >
+                Notifications
+              </button>
+            )}
           </div>
           {currentUser.role === 'admin' && managementTab === 'teams' && (
             <button 
@@ -359,7 +466,15 @@ export default React.memo(function Management({ currentUser, users, teams, trans
               <Shield size={18} /> Create Team
             </button>
           )}
-          {managementTab !== 'teams' && (
+          {managementTab === 'notifications' && (
+            <button 
+              onClick={() => setIsNotificationModalOpen(true)}
+              className="px-4 lg:px-6 py-2.5 lg:py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-xl text-sm lg:text-base"
+            >
+              <Bell size={18} /> Send Notification
+            </button>
+          )}
+          {managementTab !== 'teams' && managementTab !== 'notifications' && (
             <button 
               onClick={() => {
                 setNewUser({ ...newUser, role: managementTab === 'clients' ? 'client' : 'manager' });
@@ -424,7 +539,99 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       </div>
 
       {/* Content Area */}
-      {managementTab === 'teams' ? (
+      {managementTab === 'notifications' ? (
+        <div className="space-y-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Total Subscriptions</p>
+              <p className="text-3xl font-bold text-gray-900">
+                {Object.values(subscriptionStats).reduce((a, b) => a + b, 0)}
+              </p>
+            </div>
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Users with Push</p>
+              <p className="text-3xl font-bold text-blue-600">
+                {Object.keys(subscriptionStats).length}
+              </p>
+            </div>
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Scheduled</p>
+              <p className="text-3xl font-bold text-orange-500">
+                {scheduledNotifications.length}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <Clock className="text-blue-600" size={20} />
+              Scheduled Notifications
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="text-left border-b border-gray-50">
+                    <th className="pb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Client</th>
+                    <th className="pb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Title</th>
+                    <th className="pb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Body</th>
+                    <th className="pb-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Scheduled For</th>
+                    <th className="pb-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {scheduledNotifications.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-8 text-center text-gray-400 text-sm italic">
+                        No scheduled notifications
+                      </td>
+                    </tr>
+                  ) : (
+                    scheduledNotifications.map((notif) => {
+                      const targetUser = users.find(u => u.uid === notif.userId);
+                      return (
+                        <tr key={notif.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-[#FF0000] text-xs">
+                                {targetUser?.displayName.substring(0, 1) || '?'}
+                              </div>
+                              <span className="text-sm font-bold">{targetUser?.displayName || 'Unknown'}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 text-sm font-medium">{notif.title}</td>
+                          <td className="py-4 text-sm text-gray-500">{notif.body}</td>
+                          <td className="py-4 text-sm font-bold text-blue-600">
+                            {new Date(notif.scheduledTime).toLocaleString()}
+                          </td>
+                          <td className="py-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button 
+                                onClick={() => handleEditNotification(notif)}
+                                className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors"
+                                title="Edit"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteNotification(notif.id)}
+                                className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors"
+                                title="Cancel"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : managementTab === 'teams' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTeams.map((team) => {
             const teamLead = (users || []).find(u => u.uid === team.teamLeadId);
@@ -1052,6 +1259,16 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                   {activeEditTab === 'bot' && <motion.div layoutId="editTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF0000]" />}
                 </button>
               )}
+              <button 
+                onClick={() => setActiveEditTab('notifications')}
+                className={cn(
+                  "pb-4 px-2 text-sm font-bold uppercase tracking-widest transition-all relative",
+                  activeEditTab === 'notifications' ? "text-[#FF0000]" : "text-gray-400"
+                )}
+              >
+                Notifications
+                {activeEditTab === 'notifications' && <motion.div layoutId="editTab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#FF0000]" />}
+              </button>
             </div>
             
             {activeEditTab === 'profile' ? (
@@ -1198,6 +1415,22 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                   Save Changes
                 </button>
               </form>
+            ) : activeEditTab === 'notifications' ? (
+              <div className="space-y-6">
+                <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Connected Devices & Subscriptions</h4>
+                {editingUser.pushSubscriptions && editingUser.pushSubscriptions.length > 0 ? (
+                  <ul className="space-y-2">
+                    {editingUser.pushSubscriptions.map((sub, i) => (
+                      <li key={i} className="p-4 bg-gray-50 rounded-xl text-xs text-gray-600 break-all">
+                        <p className="font-bold mb-1">Device {i + 1}</p>
+                        {sub.endpoint}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500 italic">No active push subscriptions.</p>
+                )}
+              </div>
             ) : (
               <form onSubmit={handleUpdateBotConfig} className="space-y-6">
                 {editingUserBotConfig ? (
@@ -1517,6 +1750,115 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                 </button>
               </div>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Push Notification Modal */}
+      {isNotificationModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold">
+                {editingNotification ? 'Edit Scheduled Notification' : 'Send Push Notification'}
+              </h3>
+              <button 
+                onClick={() => {
+                  setIsNotificationModalOpen(false);
+                  setEditingNotification(null);
+                  setNotificationForm({ userId: '', title: '', body: '', scheduledTime: '', isScheduled: false, frequency: 'once' });
+                }} 
+                className="p-2 hover:bg-gray-100 rounded-xl"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={handleSendNotification} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Select Client</label>
+                <select 
+                  required
+                  value={notificationForm.userId}
+                  onChange={(e) => setNotificationForm({...notificationForm, userId: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">Select a client</option>
+                  <option value="all_inactive" className="font-bold text-blue-600">All Clients with Inactive Accounts</option>
+                  {users.filter(u => u.role === 'client' && !u.isActivated).map(u => (
+                    <option key={u.uid} value={u.uid}>{u.displayName} ({u.email})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Title</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Notification Title"
+                  value={notificationForm.title}
+                  onChange={(e) => setNotificationForm({...notificationForm, title: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Message Body</label>
+                <textarea 
+                  required
+                  placeholder="Type your message here..."
+                  value={notificationForm.body}
+                  onChange={(e) => setNotificationForm({...notificationForm, body: e.target.value})}
+                  className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500/20 min-h-[100px]"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <input 
+                  type="checkbox"
+                  id="isScheduled"
+                  checked={notificationForm.isScheduled}
+                  onChange={(e) => setNotificationForm({...notificationForm, isScheduled: e.target.checked})}
+                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="isScheduled" className="text-sm font-bold text-gray-700">Schedule notification</label>
+              </div>
+              {notificationForm.isScheduled && (
+                <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Frequency</label>
+                    <select
+                      value={notificationForm.frequency}
+                      onChange={(e) => setNotificationForm({...notificationForm, frequency: e.target.value})}
+                      className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="once">Once</option>
+                      <option value="daily">Daily</option>
+                      <option value="every3days">Every 3 days</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                      {notificationForm.frequency === 'once' ? 'Date & Time' : 'Time'}
+                    </label>
+                    <input 
+                      type={notificationForm.frequency === 'once' ? 'datetime-local' : 'time'}
+                      required
+                      value={notificationForm.scheduledTime}
+                      onChange={(e) => setNotificationForm({...notificationForm, scheduledTime: e.target.value})}
+                      className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                </div>
+              )}
+              <button 
+                type="submit"
+                className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-500/20"
+              >
+                {editingNotification ? 'Update Notification' : (notificationForm.isScheduled ? 'Schedule Notification' : 'Send Now')}
+              </button>
+            </form>
           </motion.div>
         </div>
       )}

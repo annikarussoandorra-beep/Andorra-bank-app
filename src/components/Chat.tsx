@@ -84,7 +84,16 @@ export default React.memo(function Chat({
     // Audio notification for new messages
     if (messages.length > lastMessageCount.current) {
       const lastMsg = messages[messages.length - 1];
-      if (lastMsg.senderId !== currentUser.uid) {
+      
+      // Determine if the message is incoming
+      let isIncoming = lastMsg.senderId !== currentUser.uid;
+      
+      // If staff sends a message to support, senderId is 'support-team', so we shouldn't play sound for them
+      if (isStaff && lastMsg.senderId === 'support-team') {
+        isIncoming = false;
+      }
+
+      if (isIncoming) {
         if (!audioRef.current) {
           audioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
         }
@@ -225,12 +234,15 @@ export default React.memo(function Chat({
         </div>
         <div className="flex-1 overflow-y-auto">
           {contacts.filter(contact => {
-            if (!isStaff) return true;
+            if (!isStaff) {
+              // Client: show direct manager and support-team
+              return true;
+            }
             if (chatTab === 'direct') {
-              // Show direct clients (not support-team)
+              // Staff: show direct clients (not support-team)
               return contact.uid !== 'support-team';
             } else {
-              // Show clients who have messaged support
+              // Staff: show clients who have messaged support
               const hasSupportMsgs = messages.some(m => 
                 (m.senderId === contact.uid && m.receiverId === 'support-team') ||
                 (m.senderId === 'support-team' && m.receiverId === contact.uid)
@@ -241,24 +253,41 @@ export default React.memo(function Chat({
             const lastMsg = messages.filter(m => {
               const isDirect = (m.senderId === contact.uid && m.receiverId === currentUser.uid) ||
                              (m.senderId === currentUser.uid && m.receiverId === contact.uid);
-              const isSupport = (chatTab === 'support' || !isStaff) && 
-                               (m.senderId === contact.uid && m.receiverId === 'support-team');
-              const isSupportReply = (chatTab === 'support' || !isStaff) &&
-                                    (m.senderId === 'support-team' && m.receiverId === contact.uid);
-              const isClientSupport = (currentUser.role === 'client' && contact.uid === 'support-team') &&
-                                     (m.senderId === currentUser.uid && m.receiverId === 'support-team' ||
-                                      m.senderId === 'support-team' && m.receiverId === currentUser.uid ||
-                                      (allUsers.find(u => u.uid === m.senderId)?.role === 'admin' && m.receiverId === currentUser.uid));
               
-              return isDirect || isSupport || isSupportReply || isClientSupport;
+              const isSupport = currentUser.role === 'client'
+                ? ((m.senderId === currentUser.uid && m.receiverId === 'support-team') ||
+                   (m.senderId === 'support-team' && m.receiverId === currentUser.uid))
+                : ((m.senderId === contact.uid && m.receiverId === 'support-team') ||
+                   (m.senderId === 'support-team' && m.receiverId === contact.uid));
+              
+              if (currentUser.role === 'client') {
+                if (contact.uid === 'support-team') return isSupport;
+                return isDirect;
+              }
+              
+              // Staff logic
+              if (chatTab === 'support') return isSupport;
+              return isDirect;
             }).pop();
 
             const unreadCount = messages.filter(m => {
-              if (chatTab === 'direct' || !isStaff) {
-                return m.senderId === contact.uid && m.receiverId === currentUser.uid && !m.read;
-              } else {
-                return m.senderId === contact.uid && m.receiverId === 'support-team' && !m.read;
+              const isDirect = (m.senderId === contact.uid && m.receiverId === currentUser.uid) ||
+                             (m.senderId === currentUser.uid && m.receiverId === contact.uid);
+              
+              const isSupport = currentUser.role === 'client'
+                ? ((m.senderId === currentUser.uid && m.receiverId === 'support-team') ||
+                   (m.senderId === 'support-team' && m.receiverId === currentUser.uid))
+                : ((m.senderId === contact.uid && m.receiverId === 'support-team') ||
+                   (m.senderId === 'support-team' && m.receiverId === contact.uid));
+              
+              if (currentUser.role === 'client') {
+                if (contact.uid === 'support-team') return isSupport && m.receiverId === currentUser.uid && !m.read;
+                return isDirect && m.receiverId === currentUser.uid && !m.read;
               }
+              
+              // Staff logic
+              if (chatTab === 'support') return isSupport && m.receiverId === 'support-team' && !m.read;
+              return isDirect && m.receiverId === currentUser.uid && !m.read;
             }).length;
 
             return (
@@ -274,7 +303,9 @@ export default React.memo(function Chat({
                   {contact.displayName.substring(0, 1)}
                 </div>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-xs lg:text-sm truncate">{contact.displayName}</p>
+                  <p className="font-bold text-xs lg:text-sm truncate">
+                    {contact.uid === 'support-team' ? 'Support' : contact.displayName}
+                  </p>
                   <p className="text-[10px] lg:text-xs text-gray-500 truncate">
                     {lastMsg ? lastMsg.text : contact.role.toUpperCase()}
                   </p>
@@ -312,10 +343,10 @@ export default React.memo(function Chat({
                   <Search size={20} className="rotate-90" />
                 </button>
                 <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-lg lg:rounded-xl bg-gray-100 flex items-center justify-center font-bold text-[#FF0000] text-xs lg:text-sm">
-                  {selectedContact.displayName.substring(0, 1)}
+                  {selectedContact.uid === 'support-team' ? 'S' : selectedContact.displayName.substring(0, 1)}
                 </div>
                 <div>
-                  <p className="font-bold text-xs lg:text-sm">{selectedContact.displayName}</p>
+                  <p className="font-bold text-xs lg:text-sm">{selectedContact.uid === 'support-team' ? 'Support' : selectedContact.displayName}</p>
                   <p className="text-[8px] lg:text-[10px] text-green-500 font-bold uppercase tracking-widest">Online</p>
                 </div>
               </div>
@@ -351,30 +382,34 @@ export default React.memo(function Chat({
                 const isDirect = (m.senderId === selectedContact.uid && m.receiverId === currentUser.uid) ||
                                (m.senderId === currentUser.uid && m.receiverId === selectedContact.uid);
                 
-                // Staff viewing a client's chat should also see messages the client sent to support
-                const isStaffViewingClientSupport = isStaff && selectedContact.role === 'client' && 
-                                                  m.senderId === selectedContact.uid && m.receiverId === 'support-team';
-
-                const isSupport = isStaff && selectedContact.uid === 'support-team' && m.receiverId === 'support-team';
-                const isSupportReply = isStaff && selectedContact.uid === 'support-team' && m.senderId === 'support-team';
+                const isSupport = currentUser.role === 'client'
+                  ? ((m.senderId === currentUser.uid && m.receiverId === 'support-team') ||
+                     (m.senderId === 'support-team' && m.receiverId === currentUser.uid))
+                  : ((m.senderId === selectedContact.uid && m.receiverId === 'support-team') ||
+                     (m.senderId === 'support-team' && m.receiverId === selectedContact.uid));
                 
-                const isClientSupport = (currentUser.role === 'client' && selectedContact.uid === 'support-team') &&
-                                       (m.senderId === currentUser.uid && m.receiverId === 'support-team' ||
-                                        m.senderId === 'support-team' && m.receiverId === currentUser.uid ||
-                                        (['admin', 'manager', 'team_lead', 'master'].includes((allUsers || []).find(u => u.uid === m.senderId)?.role || '') && m.receiverId === currentUser.uid));
+                if (currentUser.role === 'client') {
+                  if (selectedContact.uid === 'support-team') return isSupport;
+                  return isDirect;
+                }
                 
-                return isDirect || isStaffViewingClientSupport || isSupport || isSupportReply || isClientSupport;
-              }).map((msg) => (
+                // Staff logic
+                if (chatTab === 'support') return isSupport;
+                return isDirect;
+              }).map((msg) => {
+                const isMyMessage = msg.senderId === currentUser.uid || (isStaff && chatTab === 'support' && msg.senderId === 'support-team');
+                
+                return (
                 <div 
                   key={msg.id}
                   className={cn(
                     "flex flex-col max-w-[85%] md:max-w-[70%] group relative",
-                    msg.senderId === currentUser.uid ? "ml-auto items-end" : "items-start"
+                    isMyMessage ? "ml-auto items-end" : "items-start"
                   )}
                 >
                   <div className={cn(
                     "p-3 lg:p-4 rounded-xl lg:rounded-2xl text-xs lg:text-sm font-medium shadow-sm overflow-hidden min-w-0 relative",
-                    msg.senderId === currentUser.uid 
+                    isMyMessage 
                       ? "bg-[#FF0000] text-white rounded-tr-none" 
                       : "bg-white text-gray-900 rounded-tl-none"
                   )}>
@@ -382,14 +417,14 @@ export default React.memo(function Chat({
                       <div className="space-y-3">
                         <div className={cn(
                           "flex items-center gap-2 font-bold mb-1",
-                          msg.senderId === currentUser.uid ? "text-white" : "text-[#FF0000]"
+                          isMyMessage ? "text-white" : "text-[#FF0000]"
                         )}>
                           <CreditCard size={16} />
                           <span>Bank Requisites</span>
                         </div>
                         <div className={cn(
                           "p-3 rounded-xl font-mono text-[10px] lg:text-xs whitespace-pre-wrap border",
-                          msg.senderId === currentUser.uid 
+                          isMyMessage 
                             ? "bg-white/10 text-white border-white/20" 
                             : "bg-gray-50 text-gray-700 border-gray-100"
                         )}>
@@ -401,7 +436,7 @@ export default React.memo(function Chat({
                             "w-full py-2 rounded-xl flex items-center justify-center gap-2 transition-all font-bold text-[10px] lg:text-xs",
                             copySuccess === msg.id 
                               ? "bg-green-500 text-white" 
-                              : (msg.senderId === currentUser.uid ? "bg-white/20 text-white hover:bg-white/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
+                              : (isMyMessage ? "bg-white/20 text-white hover:bg-white/30" : "bg-gray-100 text-gray-600 hover:bg-gray-200")
                           )}
                         >
                           {copySuccess === msg.id ? <Check size={14} /> : <Copy size={14} />}
@@ -412,14 +447,14 @@ export default React.memo(function Chat({
                       <div className="space-y-3">
                         <div className={cn(
                           "flex items-center gap-2 font-bold mb-1",
-                          msg.senderId === currentUser.uid ? "text-white" : "text-[#FF0000]"
+                          isMyMessage ? "text-white" : "text-[#FF0000]"
                         )}>
                           <ExternalLink size={16} />
                           <span>Payment Request</span>
                         </div>
                         <p className={cn(
                           "text-sm",
-                          msg.senderId === currentUser.uid ? "text-white/90" : "text-gray-700"
+                          isMyMessage ? "text-white/90" : "text-gray-700"
                         )}>
                           {msg.paymentLink?.text}
                         </p>
@@ -429,7 +464,7 @@ export default React.memo(function Chat({
                           rel="noopener noreferrer"
                           className={cn(
                             "w-full py-3 rounded-xl flex items-center justify-center gap-2 font-bold transition-all shadow-lg",
-                            msg.senderId === currentUser.uid 
+                            isMyMessage 
                               ? "bg-white text-[#FF0000] hover:bg-gray-100 shadow-white/10" 
                               : "bg-[#FF0000] text-white hover:bg-red-700 shadow-red-500/20"
                           )}
@@ -447,12 +482,12 @@ export default React.memo(function Chat({
                   </div>
                   
                   {/* Message Actions */}
-                  {(msg.senderId === currentUser.uid || isStaff) && (
+                  {(isMyMessage || isStaff) && (
                     <div className={cn(
                       "absolute top-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity",
-                      msg.senderId === currentUser.uid ? "right-full mr-2" : "left-full ml-2"
+                      isMyMessage ? "right-full mr-2" : "left-full ml-2"
                     )}>
-                      {msg.senderId === currentUser.uid && msg.type !== 'requisites' && msg.type !== 'payment_link' && (
+                      {isMyMessage && msg.type !== 'requisites' && msg.type !== 'payment_link' && (
                         <button 
                           onClick={() => handleStartEdit(msg)}
                           className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 transition-colors"
@@ -475,7 +510,7 @@ export default React.memo(function Chat({
                     {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-              ))}
+              )})}
             </div>
 
             {/* Input Area */}
@@ -505,7 +540,7 @@ export default React.memo(function Chat({
                     value={editingText}
                     onChange={(e) => setEditingText(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-xs lg:text-sm font-medium text-blue-900"
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-[16px] lg:text-sm font-medium text-blue-900"
                   />
                   <button 
                     onClick={() => setEditingMessageId(null)}
@@ -537,7 +572,7 @@ export default React.memo(function Chat({
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Message..." 
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-xs lg:text-sm font-medium"
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-[16px] lg:text-sm font-medium"
                   />
                   <button 
                     onClick={() => setShowEmojiPicker(!showEmojiPicker)}

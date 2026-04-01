@@ -5,9 +5,17 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
+import webpush from "web-push";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// VAPID Keys
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "BADJvb5B5a_jdiFVShPoj42-5Q-hZoZpq2-AgEMgEktGI4qkg8ZMky1Vuukg5nB3ZKRn4oMqACobKsQEosrojaU";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "ZXN8uQP-Lh3nMktBcfAOXfCbBdI-3RClqUk2QINI3o0";
+const VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:support@andorra-bank.com";
+
+webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 const MONGODB_URI = "mongodb+srv://eurosaieu:qwerty123321@cluster0.epu0hpr.mongodb.net/trading_app?retryWrites=true&w=majority";
 
@@ -27,7 +35,8 @@ const userSchema = new mongoose.Schema({
   isActivated: { type: Boolean, default: false },
   redirectUrl: { type: String, default: null },
   demoTimeLeft: { type: Number, default: 7200 },
-  lastSeen: { type: String, default: () => new Date().toISOString() }
+  lastSeen: { type: String, default: () => new Date().toISOString() },
+  pushSubscriptions: { type: [Object], default: [] }
 });
 
 const teamSchema = new mongoose.Schema({
@@ -83,12 +92,23 @@ const messageSchema = new mongoose.Schema({
   }
 });
 
+const scheduledNotificationSchema = new mongoose.Schema({
+  id: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
+  title: { type: String, required: true },
+  body: { type: String, required: true },
+  scheduledTime: { type: String, required: true },
+  frequency: { type: String, default: 'once' },
+  sent: { type: Boolean, default: false }
+});
+
 const User = mongoose.model("User", userSchema);
 const Team = mongoose.model("Team", teamSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
 const Asset = mongoose.model("Asset", assetSchema);
 const BotConfig = mongoose.model("BotConfig", botConfigSchema);
 const Message = mongoose.model("Message", messageSchema);
+const ScheduledNotification = mongoose.model("ScheduledNotification", scheduledNotificationSchema);
 
 const INITIAL_ASSETS = [
   // Commodities
@@ -125,6 +145,36 @@ const INITIAL_ASSETS = [
   { symbol: "DOT", name: "Polkadot", type: "crypto", currentPrice: 8.40, change24h: -1.5 },
   { symbol: "DOGE", name: "Dogecoin", type: "crypto", currentPrice: 0.15, change24h: 8.5 }
 ];
+
+// Helper function to send push notifications to all subscriptions of a user
+async function sendPushToUser(user: any, title: string, body: string) {
+  if (!user.pushSubscriptions || user.pushSubscriptions.length === 0) return;
+
+  const endpointsToRemove: string[] = [];
+  const sendPromises = user.pushSubscriptions.map((sub: any) => {
+    return webpush.sendNotification(
+      sub,
+      JSON.stringify({ title: title || 'Notification', body: body || '' }),
+      {
+        TTL: 24 * 60 * 60,
+        urgency: 'high'
+      }
+    ).catch(err => {
+      console.error(`[Push] Error for ${user.uid} at ${sub.endpoint.substring(0, 30)}...:`, err.message);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        endpointsToRemove.push(sub.endpoint);
+      }
+      return null;
+    });
+  });
+
+  await Promise.all(sendPromises);
+
+  if (endpointsToRemove.length > 0) {
+    user.pushSubscriptions = user.pushSubscriptions.filter((s: any) => !endpointsToRemove.includes(s.endpoint));
+    await user.save();
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -320,7 +370,7 @@ async function startServer() {
       if (!user) return res.status(401).json({ error: "Invalid credentials" });
       if (user.status === 'suspended') return res.status(403).json({ error: "Account suspended" });
       
-      res.cookie("userId", user.uid, { httpOnly: true, sameSite: 'none', secure: true });
+      res.cookie("userId", user.uid, { httpOnly: true, sameSite: 'none', secure: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
       const userObj = user.toObject();
       delete userObj.password;
       res.json({ user: userObj });
@@ -909,6 +959,174 @@ async function startServer() {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+
+  // Push Notifications Endpoints
+  app.get("/api/notifications/vapid-public-key", (req, res) => {
+    res.json({ publicKey: VAPID_PUBLIC_KEY });
+  });
+
+  app.post("/api/notifications/subscribe", authMiddleware, async (req: any, res) => {
+    try {
+      const { subscription } = req.body;
+      const user = await User.findOne({ uid: req.user.uid });
+      if (!user) return res.status(404).json({ error: "User not found" });
+      
+      // Initialize if null
+      if (!user.pushSubscriptions) (user as any).pushSubscriptions = [];
+      
+      // Check if subscription already exists
+      const exists = (user.pushSubscriptions as any[]).some((s: any) => s.endpoint === subscription.endpoint);
+      if (!exists) {
+        (user.pushSubscriptions as any[]).push(subscription);
+        await user.save();
+      }
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/notifications/send", authMiddleware, async (req: any, res) => {
+    try {
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const { userId, title, body } = req.body;
+      
+      if (userId === 'all_inactive') {
+        const inactiveClients = await User.find({ role: 'client', isActivated: false });
+        console.log(`[Push] Sending broadcast to ${inactiveClients.length} inactive clients`);
+        
+        const broadcastPromises = inactiveClients.map(user => sendPushToUser(user, title, body));
+        await Promise.all(broadcastPromises);
+        
+        return res.json({ success: true, message: `Notification sent to all inactive clients` });
+      }
+
+      const targetUser = await User.findOne({ uid: userId });
+      if (!targetUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      await sendPushToUser(targetUser, title, body);
+      res.json({ success: true });
+    } catch (e) {
+      console.error("[Push] Send error:", e);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/notifications/schedule", authMiddleware, async (req: any, res) => {
+    try {
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const { userId, title, body, scheduledTime, frequency } = req.body;
+      
+      const notification = new ScheduledNotification({
+        id: Math.random().toString(36).substring(2, 15),
+        userId,
+        title,
+        body,
+        scheduledTime,
+        frequency: frequency || 'once',
+        sent: false
+      });
+
+      await notification.save();
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/admin/notifications/schedule/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const { id } = req.params;
+      await ScheduledNotification.findOneAndDelete({ id });
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to delete notification" });
+    }
+  });
+
+  app.patch("/api/admin/notifications/schedule/:id", authMiddleware, async (req: any, res) => {
+    try {
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const { id } = req.params;
+      const { title, body, scheduledTime, frequency } = req.body;
+      
+      await ScheduledNotification.findOneAndUpdate(
+        { id },
+        { title, body, scheduledTime, frequency },
+        { new: true }
+      );
+      res.json({ success: true });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to update notification" });
+    }
+  });
+
+  app.get("/api/admin/notifications/stats", authMiddleware, async (req: any, res) => {
+    try {
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const users = await User.find({ "pushSubscriptions.0": { $exists: true } });
+      const stats: {[key: string]: number} = {};
+      users.forEach(u => {
+        stats[u.uid] = u.pushSubscriptions.length;
+      });
+      res.json(stats);
+    } catch (e) {
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/admin/notifications/scheduled", authMiddleware, async (req: any, res) => {
+    try {
+      const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
+      if (!isStaff) return res.status(403).json({ error: "Forbidden" });
+
+      const notifications = await ScheduledNotification.find({ sent: false });
+      res.json(notifications);
+    } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Background task for scheduled notifications
+  setInterval(async () => {
+    try {
+      const now = new Date().toISOString();
+      const dueNotifications = await ScheduledNotification.find({
+        scheduledTime: { $lte: now },
+        sent: false
+      });
+
+      for (const notification of dueNotifications) {
+        if (notification.userId === 'all') {
+          const allClients = await User.find({ role: 'client' });
+          const broadcastPromises = allClients.map(user => sendPushToUser(user, notification.title, notification.body));
+          await Promise.all(broadcastPromises);
+        } else {
+          const user = await User.findOne({ uid: notification.userId });
+          if (user) {
+            await sendPushToUser(user, notification.title, notification.body);
+          }
+        }
+        notification.sent = true;
+        await notification.save();
+      }
+    } catch (e) {
+      console.error("Scheduled notifications background task error:", e);
+    }
+  }, 60000); // Check every minute
 
   // API 404 handler
   app.all("/api/*", (req, res) => {

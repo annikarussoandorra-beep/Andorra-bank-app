@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -6,7 +6,8 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   Clock,
-  CreditCard
+  CreditCard,
+  Bell
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -22,6 +23,7 @@ import {
 import { cn } from '../lib/utils';
 import { UserProfile, Transaction } from '../types';
 import { Language, translations } from '../translations';
+import { checkNotificationPermission, requestNotificationPermission, subscribeToPush } from '../services/pushNotification';
 
 interface DashboardProps {
   user: UserProfile;
@@ -34,7 +36,20 @@ type Timeframe = '1W' | '1M' | '1Y';
 
 export default React.memo(function Dashboard({ user, transactions, onViewAll, language }: DashboardProps) {
   const [timeframe, setTimeframe] = useState<Timeframe>('1W');
+  const [notificationPermission, setNotificationPermission] = useState<string>('default');
   const t = translations[language];
+  
+  useEffect(() => {
+    checkNotificationPermission().then(setNotificationPermission);
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    const permission = await requestNotificationPermission();
+    setNotificationPermission(permission);
+    if (permission === 'granted') {
+      await subscribeToPush();
+    }
+  };
   const safeTransactions = Array.isArray(transactions) ? [...transactions] : [];
   
   // Sort transactions by date descending for recent activity
@@ -118,6 +133,33 @@ export default React.memo(function Dashboard({ user, transactions, onViewAll, la
 
   return (
     <div className="space-y-4 lg:space-y-8">
+      {/* Push Notifications Banner */}
+      {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+        <div className="mb-6 bg-blue-600 rounded-2xl p-6 text-white flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+              <Bell className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">
+                {language === 'ru' ? 'Включите уведомления' : 'Enable Notifications'}
+              </h3>
+              <p className="text-blue-100 text-sm">
+                {language === 'ru' 
+                  ? 'Получайте мгновенные оповещения о сделках и сообщениях от менеджера.' 
+                  : 'Get instant alerts about trades and messages from your manager.'}
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={handleEnableNotifications}
+            className="px-6 py-2 bg-white text-blue-600 rounded-xl font-semibold hover:bg-blue-50 transition-colors whitespace-nowrap"
+          >
+            {language === 'ru' ? 'Включить' : 'Enable'}
+          </button>
+        </div>
+      )}
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         <div className="bg-white p-4 lg:p-6 rounded-2xl shadow-sm border border-gray-100">
