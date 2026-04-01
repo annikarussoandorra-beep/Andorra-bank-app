@@ -45,7 +45,7 @@ interface ManagementProps {
 
 export default React.memo(function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteTeam, onDeleteUser, onCreateTransaction }: ManagementProps) {
   const [view, setView] = useState<'list' | 'grid'>('list');
-  const [managementTab, setManagementTab] = useState<'clients' | 'staff' | 'teams' | 'notifications'>('clients');
+  const [managementTab, setManagementTab] = useState<'clients' | 'staff' | 'teams' | 'notifications' | 'system'>('clients');
   const [search, setSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -62,6 +62,10 @@ export default React.memo(function Management({ currentUser, users, teams, trans
   });
   const [scheduledNotifications, setScheduledNotifications] = useState<any[]>([]);
   const [subscriptionStats, setSubscriptionStats] = useState<{[key: string]: number}>({});
+  const [systemConfig, setSystemConfig] = useState({
+    deleteInactiveUnactivatedDays: 30,
+    deleteInactiveActivatedDays: 90
+  });
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
   const [editingUserBotConfig, setEditingUserBotConfig] = useState<BotConfig | null>(null);
@@ -95,8 +99,34 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       fetch('/api/admin/notifications/stats')
         .then(res => res.json())
         .then(setSubscriptionStats);
+    } else if (managementTab === 'system') {
+      fetch('/api/admin/system-config')
+        .then(res => res.json())
+        .then(data => {
+          if (data) {
+            setSystemConfig({
+              deleteInactiveUnactivatedDays: data.deleteInactiveUnactivatedDays || 30,
+              deleteInactiveActivatedDays: data.deleteInactiveActivatedDays || 90
+            });
+          }
+        });
     }
   }, [managementTab]);
+
+  const handleUpdateSystemConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('/api/admin/system-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(systemConfig)
+      });
+      if (!response.ok) throw new Error('Failed to update system configuration');
+      alert('System configuration updated successfully');
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
 
   const handleSendNotification = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -457,6 +487,17 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                 Notifications
               </button>
             )}
+            {(currentUser.role === 'admin' || currentUser.role === 'master') && (
+              <button 
+                onClick={() => setManagementTab('system')}
+                className={cn(
+                  "px-4 lg:px-6 py-2.5 lg:py-3 rounded-2xl font-bold transition-all text-sm lg:text-base",
+                  managementTab === 'system' ? "bg-white shadow-xl text-[#FF0000]" : "text-gray-400 hover:text-gray-600"
+                )}
+              >
+                System
+              </button>
+            )}
           </div>
           {currentUser.role === 'admin' && managementTab === 'teams' && (
             <button 
@@ -629,6 +670,64 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      ) : managementTab === 'system' ? (
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white p-6 lg:p-8 rounded-3xl shadow-sm border border-gray-100">
+            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+              <Activity className="text-[#FF0000]" size={24} />
+              Account Cleanup Settings
+            </h3>
+            <p className="text-sm text-gray-500 mb-8">
+              Configure automatic deletion of inactive accounts to keep the system clean. 
+              Accounts that have not been active for the specified number of days will be permanently deleted along with all their associated data (chats, transactions, etc.).
+            </p>
+
+            <form onSubmit={handleUpdateSystemConfig} className="space-y-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Delete Inactive Unactivated Accounts (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={systemConfig.deleteInactiveUnactivatedDays}
+                    onChange={(e) => setSystemConfig(prev => ({ ...prev, deleteInactiveUnactivatedDays: parseInt(e.target.value) || 30 }))}
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Applies to accounts that have registered but never activated their email/account.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    Delete Inactive Activated Accounts (Days)
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={systemConfig.deleteInactiveActivatedDays}
+                    onChange={(e) => setSystemConfig(prev => ({ ...prev, deleteInactiveActivatedDays: parseInt(e.target.value) || 90 }))}
+                    className="w-full px-4 py-3 bg-gray-50 border-none rounded-xl focus:ring-2 focus:ring-[#FF0000]/20"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Applies to fully activated accounts that have not logged in or shown activity.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100">
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-[#FF0000] text-white rounded-xl font-bold hover:bg-red-700 transition-colors"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       ) : managementTab === 'teams' ? (

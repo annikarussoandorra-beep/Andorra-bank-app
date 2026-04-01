@@ -102,6 +102,12 @@ const scheduledNotificationSchema = new mongoose.Schema({
   sent: { type: Boolean, default: false }
 });
 
+const systemConfigSchema = new mongoose.Schema({
+  id: { type: String, default: 'global' },
+  deleteInactiveUnactivatedDays: { type: Number, default: 30 },
+  deleteInactiveActivatedDays: { type: Number, default: 90 }
+});
+
 const User = mongoose.model("User", userSchema);
 const Team = mongoose.model("Team", teamSchema);
 const Transaction = mongoose.model("Transaction", transactionSchema);
@@ -109,6 +115,7 @@ const Asset = mongoose.model("Asset", assetSchema);
 const BotConfig = mongoose.model("BotConfig", botConfigSchema);
 const Message = mongoose.model("Message", messageSchema);
 const ScheduledNotification = mongoose.model("ScheduledNotification", scheduledNotificationSchema);
+const SystemConfig = mongoose.model("SystemConfig", systemConfigSchema);
 
 const INITIAL_ASSETS = [
   // Commodities
@@ -800,6 +807,36 @@ async function startServer() {
     }
   });
 
+  app.get("/api/admin/system-config", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== 'admin' && req.user.role !== 'master') return res.status(403).json({ error: "Forbidden" });
+      let config = await SystemConfig.findOne({ id: 'global' });
+      if (!config) {
+        config = new SystemConfig({ id: 'global' });
+        await config.save();
+      }
+      res.json(config);
+    } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/admin/system-config", authMiddleware, async (req: any, res) => {
+    try {
+      if (req.user.role !== 'admin' && req.user.role !== 'master') return res.status(403).json({ error: "Forbidden" });
+      const { deleteInactiveUnactivatedDays, deleteInactiveActivatedDays } = req.body;
+      
+      const config = await SystemConfig.findOneAndUpdate(
+        { id: 'global' },
+        { deleteInactiveUnactivatedDays, deleteInactiveActivatedDays },
+        { new: true, upsert: true }
+      );
+      res.json(config);
+    } catch (e) {
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.post("/api/admin/update-team/:id", authMiddleware, async (req: any, res) => {
     try {
       if (req.user.role !== 'admin' && req.user.role !== 'master') return res.status(403).json({ error: "Forbidden" });
@@ -1127,6 +1164,48 @@ async function startServer() {
       console.error("Scheduled notifications background task error:", e);
     }
   }, 60000); // Check every minute
+
+  // Background task for account cleanup
+  setInterval(async () => {
+    try {
+      const config = await SystemConfig.findOne({ id: 'global' });
+      if (!config) return;
+
+      const now = new Date();
+      
+      // Calculate cutoff dates
+      const unactivatedCutoff = new Date(now.getTime() - config.deleteInactiveUnactivatedDays * 24 * 60 * 60 * 1000).toISOString();
+      const activatedCutoff = new Date(now.getTime() - config.deleteInactiveActivatedDays * 24 * 60 * 60 * 1000).toISOString();
+
+      // Find users to delete
+      const usersToDelete = await User.find({
+        role: 'client',
+        $or: [
+          { isActivated: false, lastSeen: { $lt: unactivatedCutoff } },
+          { isActivated: true, lastSeen: { $lt: activatedCutoff } }
+        ]
+      });
+
+      for (const user of usersToDelete) {
+        console.log(`[Cleanup] Deleting inactive user: ${user.uid} (${user.email})`);
+        
+        // Delete associated data
+        await Transaction.deleteMany({ userId: user.uid });
+        await BotConfig.deleteOne({ userId: user.uid });
+        await Message.deleteMany({
+          $or: [
+            { senderId: user.uid },
+            { receiverId: user.uid }
+          ]
+        });
+        
+        // Delete the user
+        await User.deleteOne({ uid: user.uid });
+      }
+    } catch (e) {
+      console.error("Account cleanup background task error:", e);
+    }
+  }, 60 * 60 * 1000); // Check every hour
 
   // API 404 handler
   app.all("/api/*", (req, res) => {
