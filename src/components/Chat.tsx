@@ -306,6 +306,8 @@ export default React.memo(function Chat({
               return isDirect && m.receiverId === currentUser.uid && !m.read;
             }).length;
 
+            const isContactOnline = contact.uid === 'support-team' ? true : (contact.lastSeen && (new Date().getTime() - new Date(contact.lastSeen).getTime()) < 5 * 60 * 1000);
+
             return (
               <button
                 key={contact.uid}
@@ -315,8 +317,14 @@ export default React.memo(function Chat({
                   selectedContact?.uid === contact.uid && "bg-red-50 border-l-4 border-l-[#FF0000]"
                 )}
               >
-                <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl lg:rounded-2xl bg-gray-100 flex items-center justify-center font-bold text-[#FF0000] text-sm lg:text-base">
-                  {contact.displayName.substring(0, 1)}
+                <div className="relative">
+                  <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl lg:rounded-2xl bg-gray-100 flex items-center justify-center font-bold text-[#FF0000] text-sm lg:text-base">
+                    {contact.uid === 'support-team' ? 'S' : contact.displayName.substring(0, 1)}
+                  </div>
+                  <div className={cn(
+                    "absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white",
+                    isContactOnline ? "bg-green-500" : "bg-gray-300"
+                  )} />
                 </div>
                 <div className="text-left flex-1 min-w-0">
                   <p className="font-bold text-xs lg:text-sm truncate">
