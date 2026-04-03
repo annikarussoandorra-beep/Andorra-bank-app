@@ -763,14 +763,25 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                   ) : (
                     scheduledNotifications.map((notif) => {
                       const targetUser = users.find(u => u.uid === notif.userId);
+                      let displayName = targetUser?.displayName || 'Unknown';
+                      let initial = targetUser?.displayName.substring(0, 1) || '?';
+                      
+                      if (notif.userId === 'all_inactive') {
+                        displayName = 'All Inactive Clients';
+                        initial = 'A';
+                      } else if (notif.userId === 'all') {
+                        displayName = 'All Users';
+                        initial = 'A';
+                      }
+                      
                       return (
                         <tr key={notif.id} className="hover:bg-gray-50/50 transition-colors">
                           <td className="py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-[#FF0000] text-xs">
-                                {targetUser?.displayName.substring(0, 1) || '?'}
+                                {initial}
                               </div>
-                              <span className="text-sm font-bold">{targetUser?.displayName || 'Unknown'}</span>
+                              <span className="text-sm font-bold">{displayName}</span>
                             </div>
                           </td>
                           <td className="py-4 text-sm font-medium">{notif.title}</td>

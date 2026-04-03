@@ -95,6 +95,7 @@ const messageSchema = new mongoose.Schema({
 const scheduledNotificationSchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   userId: { type: String, required: true },
+  creatorId: { type: String },
   title: { type: String, required: true },
   body: { type: String, required: true },
   scheduledTime: { type: String, required: true },
@@ -1031,7 +1032,18 @@ async function startServer() {
       const { userId, title, body } = req.body;
       
       if (userId === 'all_inactive') {
-        const inactiveClients = await User.find({ role: 'client', isActivated: false });
+        let query: any = { role: 'client', isActivated: false };
+        if (req.user.role === 'manager') {
+          query.managerId = req.user.uid;
+        } else if (req.user.role === 'team_lead') {
+          const team = await Team.findOne({ teamLeadId: req.user.uid });
+          if (team) {
+            query.managerId = { $in: team.members };
+          } else {
+            query.managerId = req.user.uid;
+          }
+        }
+        const inactiveClients = await User.find(query);
         console.log(`[Push] Sending broadcast to ${inactiveClients.length} inactive clients`);
         
         const broadcastPromises = inactiveClients.map(user => sendPushToUser(user, title, body));
@@ -1065,6 +1077,7 @@ async function startServer() {
       const notification = new ScheduledNotification({
         id: Math.random().toString(36).substring(2, 15),
         userId,
+        creatorId: req.user.uid,
         title,
         body,
         scheduledTime,
@@ -1134,7 +1147,38 @@ async function startServer() {
       const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
       if (!isStaff) return res.status(403).json({ error: "Forbidden" });
 
-      const notifications = await ScheduledNotification.find({ sent: false });
+      let notifications = await ScheduledNotification.find({ sent: false });
+
+      if (req.user.role === 'manager' || req.user.role === 'team_lead') {
+        let allowedUserIds = new Set<string>();
+        let query: any = { role: 'client' };
+        
+        let allowedManagerIds = new Set<string>();
+        
+        if (req.user.role === 'manager') {
+          query.managerId = req.user.uid;
+          allowedManagerIds.add(req.user.uid);
+        } else if (req.user.role === 'team_lead') {
+          const team = await Team.findOne({ teamLeadId: req.user.uid });
+          if (team) {
+            query.managerId = { $in: team.members };
+            team.members.forEach(m => allowedManagerIds.add(m));
+          } else {
+            query.managerId = req.user.uid;
+          }
+          allowedManagerIds.add(req.user.uid);
+        }
+        
+        const allowedUsers = await User.find(query);
+        allowedUsers.forEach(u => allowedUserIds.add(u.uid));
+
+        notifications = notifications.filter(n => {
+          if (n.userId === 'all') return false;
+          if (n.userId === 'all_inactive') return allowedManagerIds.has(n.creatorId);
+          return allowedUserIds.has(n.userId);
+        });
+      }
+
       res.json(notifications);
     } catch (e) {
       res.status(500).json({ error: "Internal server error" });
@@ -1154,6 +1198,24 @@ async function startServer() {
         if (notification.userId === 'all') {
           const allClients = await User.find({ role: 'client' });
           const broadcastPromises = allClients.map(user => sendPushToUser(user, notification.title, notification.body));
+          await Promise.all(broadcastPromises);
+        } else if (notification.userId === 'all_inactive') {
+          let query: any = { role: 'client', isActivated: false };
+          if (notification.creatorId) {
+            const creator = await User.findOne({ uid: notification.creatorId });
+            if (creator && creator.role === 'manager') {
+              query.managerId = creator.uid;
+            } else if (creator && creator.role === 'team_lead') {
+              const team = await Team.findOne({ teamLeadId: creator.uid });
+              if (team) {
+                query.managerId = { $in: team.members };
+              } else {
+                query.managerId = creator.uid;
+              }
+            }
+          }
+          const inactiveClients = await User.find(query);
+          const broadcastPromises = inactiveClients.map(user => sendPushToUser(user, notification.title, notification.body));
           await Promise.all(broadcastPromises);
         } else {
           const user = await User.findOne({ uid: notification.userId });
