@@ -179,7 +179,9 @@ export default React.memo(function Layout({
             >
               <Menu size={24} />
             </button>
-            <h1 className="text-lg lg:text-xl font-semibold capitalize truncate">{activeTab.replace('-', ' ')}</h1>
+            <h1 className="text-lg lg:text-xl font-semibold capitalize truncate">
+              {menuItems.find(item => item.id === activeTab)?.label || activeTab.replace('-', ' ')}
+            </h1>
           </div>
           <div className="flex items-center gap-3 lg:gap-4">
             <div className="text-right hidden sm:block">

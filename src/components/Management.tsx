@@ -29,6 +29,69 @@ import { UserProfile, UserRole, Team, Transaction, BotConfig } from '../types';
 import { cn } from '../lib/utils';
 import { api } from '../firebase';
 
+import { Language } from '../translations';
+
+const adminTranslations = {
+  en: {
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    delete: 'Delete',
+    cancel_notification: 'Cancel Notification',
+    cancel_notification_confirm: 'Are you sure you want to cancel this scheduled notification?',
+    delete_transaction: 'Delete Transaction',
+    delete_transaction_confirm: 'Are you sure you want to delete this transaction? This will revert the balance change.',
+    delete_team: 'Delete Team',
+    delete_team_confirm: 'Are you sure you want to delete this team? All members will be unassigned.',
+    delete_account: 'Delete Account',
+    delete_account_confirm: 'Are you sure you want to delete the account for {name}? This action cannot be undone.',
+    system_config_updated: 'System configuration updated successfully',
+    notification_updated: 'Notification updated',
+    notification_scheduled: 'Notification scheduled',
+    notification_sent: 'Notification sent',
+    bot_config_updated: 'Bot configuration updated',
+    transaction_created: 'Transaction created successfully',
+    transaction_failed: 'Failed to create transaction',
+    user_created: 'User created successfully',
+    user_failed: 'Failed to create user',
+    user_updated: 'User updated successfully',
+    user_update_failed: 'Failed to update user',
+    team_created: 'Team created successfully',
+    team_failed: 'Failed to create team',
+    team_updated: 'Team updated successfully',
+    team_update_failed: 'Failed to update team',
+    enter_redirect_url: 'Please enter a redirect URL',
+  },
+  ru: {
+    cancel: 'Отмена',
+    confirm: 'Подтвердить',
+    delete: 'Удалить',
+    cancel_notification: 'Отменить уведомление',
+    cancel_notification_confirm: 'Вы уверены, что хотите отменить это запланированное уведомление?',
+    delete_transaction: 'Удалить транзакцию',
+    delete_transaction_confirm: 'Вы уверены, что хотите удалить эту транзакцию? Это отменит изменение баланса.',
+    delete_team: 'Удалить команду',
+    delete_team_confirm: 'Вы уверены, что хотите удалить эту команду? Все участники будут отвязаны.',
+    delete_account: 'Удалить аккаунт',
+    delete_account_confirm: 'Вы уверены, что хотите удалить аккаунт {name}? Это действие нельзя отменить.',
+    system_config_updated: 'Системная конфигурация успешно обновлена',
+    notification_updated: 'Уведомление обновлено',
+    notification_scheduled: 'Уведомление запланировано',
+    notification_sent: 'Уведомление отправлено',
+    bot_config_updated: 'Конфигурация бота обновлена',
+    transaction_created: 'Транзакция успешно создана',
+    transaction_failed: 'Не удалось создать транзакцию',
+    user_created: 'Пользователь успешно создан',
+    user_failed: 'Не удалось создать пользователя',
+    user_updated: 'Пользователь успешно обновлен',
+    user_update_failed: 'Не удалось обновить пользователя',
+    team_created: 'Команда успешно создана',
+    team_failed: 'Не удалось создать команду',
+    team_updated: 'Команда успешно обновлена',
+    team_update_failed: 'Не удалось обновить команду',
+    enter_redirect_url: 'Пожалуйста, введите URL для перенаправления',
+  }
+};
+
 interface ManagementProps {
   currentUser: UserProfile;
   users: UserProfile[];
@@ -41,9 +104,11 @@ interface ManagementProps {
   onDeleteTeam: (id: string) => void;
   onDeleteUser: (uid: string) => void;
   onCreateTransaction: (data: any) => Promise<void>;
+  language?: Language;
 }
 
-export default React.memo(function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteTeam, onDeleteUser, onCreateTransaction }: ManagementProps) {
+export default React.memo(function Management({ currentUser, users, teams, transactions, onUpdateUser, onCreateUser, onCreateTeam, onUpdateTeam, onDeleteTeam, onDeleteUser, onCreateTransaction, language = 'en' }: ManagementProps) {
+  const tAdmin = adminTranslations[language as keyof typeof adminTranslations] || adminTranslations.en;
   const [view, setView] = useState<'list' | 'grid'>('list');
   const [managementTab, setManagementTab] = useState<'clients' | 'staff' | 'teams' | 'notifications' | 'system'>('clients');
   const [search, setSearch] = useState('');
@@ -122,7 +187,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
         body: JSON.stringify(systemConfig)
       });
       if (!response.ok) throw new Error('Failed to update system configuration');
-      alert('System configuration updated successfully');
+      alert(tAdmin.system_config_updated);
     } catch (e: any) {
       alert(e.message);
     }
@@ -131,6 +196,22 @@ export default React.memo(function Management({ currentUser, users, teams, trans
   const handleSendNotification = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    let finalScheduledTime = notificationForm.scheduledTime;
+    
+    if (notificationForm.isScheduled) {
+      if (notificationForm.frequency !== 'once') {
+        const [hours, minutes] = notificationForm.scheduledTime.split(':').map(Number);
+        const now = new Date();
+        const nextDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0, 0);
+        if (nextDate <= now) {
+          nextDate.setDate(nextDate.getDate() + 1);
+        }
+        finalScheduledTime = nextDate.toISOString();
+      } else {
+        finalScheduledTime = new Date(notificationForm.scheduledTime).toISOString();
+      }
+    }
+
     const isEditing = !!editingNotification;
     const endpoint = isEditing 
       ? `/api/admin/notifications/schedule/${editingNotification.id}`
@@ -148,7 +229,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
           body: notificationForm.body,
           isScheduled: notificationForm.isScheduled,
           frequency: notificationForm.isScheduled ? notificationForm.frequency : 'once',
-          scheduledTime: notificationForm.isScheduled ? notificationForm.scheduledTime : undefined
+          scheduledTime: notificationForm.isScheduled ? finalScheduledTime : undefined
         })
       });
       
@@ -157,7 +238,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
         throw new Error(data.error || 'Failed to process notification');
       }
       
-      alert(isEditing ? 'Notification updated' : (notificationForm.isScheduled ? 'Notification scheduled' : 'Notification sent'));
+      alert(isEditing ? tAdmin.notification_updated : (notificationForm.isScheduled ? tAdmin.notification_scheduled : tAdmin.notification_sent));
       setIsNotificationModalOpen(false);
       setEditingNotification(null);
       setNotificationForm({ userId: '', title: '', body: '', scheduledTime: '', isScheduled: false, frequency: 'once' });
@@ -173,25 +254,53 @@ export default React.memo(function Management({ currentUser, users, teams, trans
   };
 
   const handleDeleteNotification = async (id: string) => {
-    if (!window.confirm('Are you sure you want to cancel this scheduled notification?')) return;
-    try {
-      const response = await fetch(`/api/admin/notifications/schedule/${id}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) throw new Error('Failed to delete notification');
-      setScheduledNotifications(prev => prev.filter(n => n.id !== id));
-    } catch (e: any) {
-      alert(e.message);
-    }
+    setConfirmDialog({
+      title: tAdmin.cancel_notification,
+      message: tAdmin.cancel_notification_confirm,
+      onConfirm: async () => {
+        try {
+          const response = await fetch(`/api/admin/notifications/schedule/${id}`, {
+            method: 'DELETE'
+          });
+          if (!response.ok) throw new Error('Failed to delete notification');
+          setScheduledNotifications(prev => prev.filter(n => n.id !== id));
+        } catch (e: any) {
+          alert(e.message);
+        }
+      }
+    });
   };
 
   const handleEditNotification = (notif: any) => {
     setEditingNotification(notif);
+    
+    let formattedTime = '';
+    if (notif.scheduledTime) {
+      if (notif.frequency === 'once' || !notif.frequency) {
+        try {
+          const d = new Date(notif.scheduledTime);
+          const tzoffset = d.getTimezoneOffset() * 60000;
+          formattedTime = (new Date(d.getTime() - tzoffset)).toISOString().slice(0, 16);
+        } catch (e) {
+          formattedTime = '';
+        }
+      } else {
+        try {
+          const d = new Date(notif.scheduledTime);
+          const hours = d.getHours().toString().padStart(2, '0');
+          const minutes = d.getMinutes().toString().padStart(2, '0');
+          formattedTime = `${hours}:${minutes}`;
+        } catch (e) {
+          formattedTime = '';
+        }
+      }
+    }
+
     setNotificationForm({
       userId: notif.userId,
       title: notif.title,
       body: notif.body,
-      scheduledTime: notif.scheduledTime.substring(0, 16), // Format for datetime-local
+      scheduledTime: formattedTime,
       isScheduled: true,
       frequency: notif.frequency || 'once'
     });
@@ -207,28 +316,38 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(editingUserBotConfig)
     });
-    alert('Bot configuration updated');
+    alert(tAdmin.bot_config_updated);
   }, [editingUser, editingUserBotConfig]);
 
   const handleDeleteTransaction = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this transaction? This will revert the balance change.')) return;
-    try {
-      await api.deleteTransaction(id);
-      // We need to refresh the transactions list.
-      // The parent component should ideally pass a refresh function, or we can just reload the page for now.
-      window.location.reload();
-    } catch (e: any) {
-      alert(e.message || 'Failed to delete transaction');
-    }
+    setConfirmDialog({
+      title: tAdmin.delete_transaction,
+      message: tAdmin.delete_transaction_confirm,
+      onConfirm: async () => {
+        try {
+          await api.deleteTransaction(id);
+          // We need to refresh the transactions list.
+          // The parent component should ideally pass a refresh function, or we can just reload the page for now.
+          window.location.reload();
+        } catch (e: any) {
+          alert(e.message || tAdmin.transaction_failed);
+        }
+      }
+    });
   };
 
   const handleDeleteTeam = async (id: string) => {
-    if (!window.confirm('Are you sure you want to delete this team? All members will be unassigned.')) return;
-    try {
-      await onDeleteTeam(id);
-    } catch (e: any) {
-      alert(e.message || 'Failed to delete team');
-    }
+    setConfirmDialog({
+      title: tAdmin.delete_team,
+      message: tAdmin.delete_team_confirm,
+      onConfirm: async () => {
+        try {
+          await onDeleteTeam(id);
+        } catch (e: any) {
+          alert(e.message || tAdmin.team_failed);
+        }
+      }
+    });
   };
 
   const [viewingUserTxs, setViewingUserTxs] = useState<UserProfile | null>(null);
@@ -246,6 +365,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
 
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<UserProfile | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{title: string, message: string, onConfirm: () => void} | null>(null);
   const [activatingUser, setActivatingUser] = useState<UserProfile | null>(null);
   const [redirectUrl, setRedirectUrl] = useState('');
   const [transactionUser, setTransactionUser] = useState<UserProfile | null>(null);
@@ -266,9 +386,9 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       });
       setIsTransactionModalOpen(false);
       setTransactionUser(null);
-      alert('Transaction created successfully');
+      alert(tAdmin.transaction_created);
     } catch (error) {
-      alert('Failed to create transaction');
+      alert(tAdmin.transaction_failed);
     }
   }, [transactionUser, transactionData, onCreateTransaction]);
 
@@ -308,9 +428,9 @@ export default React.memo(function Management({ currentUser, users, teams, trans
         isActivated: false,
         demoTimeLeft: 7200
       });
-      alert('User created successfully');
+      alert(tAdmin.user_created);
     } catch (e: any) {
-      alert(e.message || 'Failed to create user');
+      alert(e.message || tAdmin.user_failed);
     }
   }, [currentUser, newUser, onCreateUser]);
 
@@ -320,9 +440,9 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       try {
         await onUpdateUser(editingUser.uid, editingUser);
         setEditingUser(null);
-        alert('User updated successfully');
+        alert(tAdmin.user_updated);
       } catch (e: any) {
-        alert(e.message || 'Failed to update user');
+        alert(e.message || tAdmin.user_update_failed);
       }
     }
   }, [editingUser, onUpdateUser]);
@@ -333,9 +453,9 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       await onCreateTeam(newTeam);
       setIsTeamModalOpen(false);
       setNewTeam({ name: '', teamLeadId: '' });
-      alert('Team created successfully');
+      alert(tAdmin.team_created);
     } catch (e: any) {
-      alert(e.message || 'Failed to create team');
+      alert(e.message || tAdmin.team_failed);
     }
   }, [newTeam, onCreateTeam]);
 
@@ -345,9 +465,9 @@ export default React.memo(function Management({ currentUser, users, teams, trans
       try {
         await onUpdateTeam(editingTeam.id, editingTeam);
         setEditingTeam(null);
-        alert('Team updated successfully');
+        alert(tAdmin.team_updated);
       } catch (e: any) {
-        alert(e.message || 'Failed to update team');
+        alert(e.message || tAdmin.team_update_failed);
       }
     }
   }, [editingTeam, onUpdateTeam]);
@@ -387,6 +507,19 @@ export default React.memo(function Management({ currentUser, users, teams, trans
   const filteredTeams = teams.filter(team => 
     team.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const formatScheduledTime = (timeStr: string, frequency: string) => {
+    const d = new Date(timeStr);
+    if (isNaN(d.getTime())) {
+      return timeStr; // Fallback for old data
+    }
+    if (frequency === 'daily') {
+      return `Daily at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (frequency === 'every3days') {
+      return `Every 3 days at ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (Next: ${d.toLocaleDateString()})`;
+    }
+    return d.toLocaleString();
+  };
 
   return (
     <div className="space-y-6 lg:space-y-10">
@@ -643,7 +776,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                           <td className="py-4 text-sm font-medium">{notif.title}</td>
                           <td className="py-4 text-sm text-gray-500">{notif.body}</td>
                           <td className="py-4 text-sm font-bold text-blue-600">
-                            {new Date(notif.scheduledTime).toLocaleString()}
+                            {formatScheduledTime(notif.scheduledTime, notif.frequency)}
                           </td>
                           <td className="py-4 text-right">
                             <div className="flex items-center justify-end gap-2">
@@ -1797,7 +1930,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                 <button 
                   onClick={() => {
                     if (!redirectUrl) {
-                      alert('Please enter a redirect URL');
+                      alert(tAdmin.enter_redirect_url);
                       return;
                     }
                     onUpdateUser(activatingUser.uid, { isActivated: true, redirectUrl });
@@ -1806,6 +1939,46 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                   className="flex-1 py-4 bg-green-600 text-white rounded-2xl font-bold hover:bg-green-700 transition-all shadow-xl shadow-green-500/20"
                 >
                   Activate
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Generic Confirmation Dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-2xl font-bold">{confirmDialog.title}</h3>
+              <button onClick={() => setConfirmDialog(null)} className="p-2 hover:bg-gray-100 rounded-xl">
+                <X size={24} />
+              </button>
+            </div>
+            <div className="space-y-6">
+              <p className="text-gray-600">
+                {confirmDialog.message}
+              </p>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setConfirmDialog(null)}
+                  className="flex-1 py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 transition-all"
+                >
+                  {tAdmin.cancel}
+                </button>
+                <button 
+                  onClick={() => {
+                    confirmDialog.onConfirm();
+                    setConfirmDialog(null);
+                  }}
+                  className="flex-1 py-4 bg-[#FF0000] text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-xl shadow-red-500/20"
+                >
+                  {tAdmin.confirm}
                 </button>
               </div>
             </div>
@@ -1822,21 +1995,21 @@ export default React.memo(function Management({ currentUser, users, teams, trans
             className="bg-white w-full max-w-md rounded-3xl p-8 shadow-2xl"
           >
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold">Delete Account</h3>
+              <h3 className="text-2xl font-bold">{tAdmin.delete_account}</h3>
               <button onClick={() => setUserToDelete(null)} className="p-2 hover:bg-gray-100 rounded-xl">
                 <X size={24} />
               </button>
             </div>
             <div className="space-y-6">
               <p className="text-gray-600">
-                Are you sure you want to delete the account for <span className="font-bold text-gray-900">{userToDelete.displayName}</span>? This action cannot be undone.
+                {tAdmin.delete_account_confirm} <span className="font-bold text-gray-900">{userToDelete.displayName}</span>? {tAdmin.this_action_cannot_be_undone}
               </p>
               <div className="flex gap-4">
                 <button 
                   onClick={() => setUserToDelete(null)}
                   className="flex-1 py-4 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 transition-all"
                 >
-                  Cancel
+                  {tAdmin.cancel}
                 </button>
                 <button 
                   onClick={() => {
@@ -1845,7 +2018,7 @@ export default React.memo(function Management({ currentUser, users, teams, trans
                   }}
                   className="flex-1 py-4 bg-[#FF0000] text-white rounded-2xl font-bold hover:bg-red-700 transition-all shadow-xl shadow-red-500/20"
                 >
-                  Delete
+                  {tAdmin.delete}
                 </button>
               </div>
             </div>

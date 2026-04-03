@@ -371,7 +371,12 @@ export default React.memo(function Chat({
                 </div>
                 <div>
                   <p className="font-bold text-xs lg:text-sm">{selectedContact.uid === 'support-team' ? 'Support' : selectedContact.displayName}</p>
-                  <p className="text-[8px] lg:text-[10px] text-green-500 font-bold uppercase tracking-widest">Online</p>
+                  <p className={cn(
+                    "text-[8px] lg:text-[10px] font-bold uppercase tracking-widest",
+                    (selectedContact.uid === 'support-team' ? true : (selectedContact.lastSeen && (new Date().getTime() - new Date(selectedContact.lastSeen).getTime()) < 5 * 60 * 1000)) ? "text-green-500" : "text-gray-400"
+                  )}>
+                    {(selectedContact.uid === 'support-team' ? true : (selectedContact.lastSeen && (new Date().getTime() - new Date(selectedContact.lastSeen).getTime()) < 5 * 60 * 1000)) ? "Online" : "Offline"}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-1 lg:gap-2">

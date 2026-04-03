@@ -1058,7 +1058,9 @@ async function startServer() {
       const isStaff = ['admin', 'manager', 'team_lead', 'master'].includes(req.user.role);
       if (!isStaff) return res.status(403).json({ error: "Forbidden" });
 
-      const { userId, title, body, scheduledTime, frequency } = req.body;
+      let { userId, title, body, scheduledTime, frequency } = req.body;
+      
+      scheduledTime = new Date(scheduledTime).toISOString();
       
       const notification = new ScheduledNotification({
         id: Math.random().toString(36).substring(2, 15),
@@ -1096,7 +1098,9 @@ async function startServer() {
       if (!isStaff) return res.status(403).json({ error: "Forbidden" });
 
       const { id } = req.params;
-      const { title, body, scheduledTime, frequency } = req.body;
+      let { title, body, scheduledTime, frequency } = req.body;
+      
+      scheduledTime = new Date(scheduledTime).toISOString();
       
       await ScheduledNotification.findOneAndUpdate(
         { id },
@@ -1157,7 +1161,19 @@ async function startServer() {
             await sendPushToUser(user, notification.title, notification.body);
           }
         }
-        notification.sent = true;
+        
+        if (notification.frequency === 'daily') {
+          const nextDate = new Date(notification.scheduledTime);
+          nextDate.setDate(nextDate.getDate() + 1);
+          notification.scheduledTime = nextDate.toISOString();
+        } else if (notification.frequency === 'every3days') {
+          const nextDate = new Date(notification.scheduledTime);
+          nextDate.setDate(nextDate.getDate() + 3);
+          notification.scheduledTime = nextDate.toISOString();
+        } else {
+          notification.sent = true;
+        }
+        
         await notification.save();
       }
     } catch (e) {

@@ -269,7 +269,7 @@ export default function App() {
       if (data.success) {
         setIsInitialized(true);
         setIsBootstrapping(false);
-        alert('System initialized. You can now log in.');
+        alert(translations[language as keyof typeof translations]?.system_initialized || 'System initialized. You can now log in.');
       } else {
         setLoginError(data.error);
       }
@@ -309,7 +309,7 @@ export default function App() {
   const handleTrade = React.useCallback(async (asset: Asset, type: 'buy' | 'sell', amount: number) => {
     if (!user || amount <= 0) return;
     if (type === 'buy' && user.balance < amount) {
-      alert('Insufficient balance');
+      alert(translations[language].insufficient_balance || 'Insufficient balance');
       return;
     }
 
@@ -568,7 +568,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPass })
-      }).then(() => alert('Password updated successfully'))
+      }).then(() => alert(translations[language as keyof typeof translations]?.password_updated || 'Password updated successfully'))
         .catch(e => console.error("Failed to update password", e));
     }
   }, [user]);
@@ -828,6 +828,7 @@ export default function App() {
               onDeleteTeam={handleDeleteTeamAction}
               onDeleteUser={deleteUser}
               onCreateTransaction={handleAdminCreateTransaction}
+              language={language}
             />
           )}
       {activeTab === 'settings' && (

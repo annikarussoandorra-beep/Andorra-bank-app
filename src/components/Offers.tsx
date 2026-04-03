@@ -13,10 +13,10 @@ export default function Offers({ user, language }: OffersProps) {
 
   const handleApply = () => {
     if (!user.isActivated) {
-      alert(t.onboarding_3_desc); // Using a placeholder for now, or I should add specific keys
+      alert(t.account_not_activated_alert || t.onboarding_3_desc);
       return;
     }
-    alert(t.get_started); // Placeholder
+    alert(t.contact_manager_alert || t.get_started);
   };
 
   const offers = [

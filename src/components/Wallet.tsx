@@ -58,7 +58,7 @@ export default React.memo(function Wallet({ user, transactions, onDeposit, onWit
       return;
     }
     if (numAmount > user.balance) {
-      alert('Insufficient balance');
+      alert(t.insufficient_balance || 'Insufficient balance');
       return;
     }
     scrollToActions();
@@ -89,7 +89,7 @@ export default React.memo(function Wallet({ user, transactions, onDeposit, onWit
   };
 
   const handleDetailsClick = () => {
-    alert('You cannot get account details until you activate your account. Please contact your manager.');
+    alert(t.account_details_alert || 'You cannot get account details until you activate your account. Please contact your manager.');
   };
 
   const filteredTransactions = safeTransactions.filter(tx => {
