@@ -17,7 +17,7 @@ const VAPID_EMAIL = process.env.VAPID_EMAIL || "mailto:support@andorra-bank.com"
 
 webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
-const MONGODB_URI = "mongodb+srv://eurosaieu:qwerty123321@cluster0.epu0hpr.mongodb.net/trading_app?retryWrites=true&w=majority";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://eurosaieu:qwerty123321@cluster0.epu0hpr.mongodb.net/trading_app?retryWrites=true&w=majority";
 
 // Mongoose Schemas
 const userSchema = new mongoose.Schema({
